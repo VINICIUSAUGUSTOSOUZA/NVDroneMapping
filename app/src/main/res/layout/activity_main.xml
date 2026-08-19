@@ -53,7 +53,9 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- Botões superiores do mapa -->
+        <!-- ================================================== -->
+        <!-- BOTÕES SUPERIORES DO MAPA                          -->
+        <!-- ================================================== -->
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -67,8 +69,8 @@
                 android:layout_width="0dp"
                 android:layout_height="36dp"
                 android:layout_weight="1"
-                android:minHeight="0dp"
                 android:minWidth="0dp"
+                android:minHeight="0dp"
                 android:padding="2dp"
                 android:text="DESFAZER"
                 android:textSize="10sp" />
@@ -82,8 +84,8 @@
                 android:layout_width="0dp"
                 android:layout_height="36dp"
                 android:layout_weight="1"
-                android:minHeight="0dp"
                 android:minWidth="0dp"
+                android:minHeight="0dp"
                 android:padding="2dp"
                 android:text="LIMPAR"
                 android:textSize="10sp" />
@@ -97,8 +99,8 @@
                 android:layout_width="0dp"
                 android:layout_height="36dp"
                 android:layout_weight="1"
-                android:minHeight="0dp"
                 android:minWidth="0dp"
+                android:minHeight="0dp"
                 android:padding="2dp"
                 android:text="IMPORTAR"
                 android:textSize="10sp" />
@@ -106,67 +108,73 @@
         </LinearLayout>
 
         <!-- ================================================== -->
-        <!-- BOTÕES FLUTUANTES DO MAPA                          -->
+        <!-- BOTÕES FLUTUANTES DIREITA                          -->
         <!-- ================================================== -->
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_marginEnd="10dp"
-            android:layout_marginBottom="12dp"
+            android:layout_marginEnd="9dp"
+            android:layout_marginBottom="10dp"
             android:gravity="center"
             android:orientation="vertical">
 
-            <!-- Enquadrar polígono -->
+            <!-- Enquadrar terreno -->
 
             <Button
                 android:id="@+id/btnFitBoundary"
-                android:layout_width="46dp"
-                android:layout_height="46dp"
-                android:layout_marginBottom="7dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginBottom="6dp"
                 android:backgroundTint="@color/navy"
-                android:minHeight="0dp"
                 android:minWidth="0dp"
+                android:minHeight="0dp"
                 android:padding="0dp"
                 android:text="▣"
                 android:textColor="@color/white"
-                android:textSize="19sp" />
+                android:textSize="17sp" />
 
-            <!-- Minha localização -->
+            <!-- Localização -->
 
             <Button
                 android:id="@+id/btnMyLocation"
-                android:layout_width="46dp"
-                android:layout_height="46dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:backgroundTint="@color/navy"
-                android:minHeight="0dp"
                 android:minWidth="0dp"
+                android:minHeight="0dp"
                 android:padding="0dp"
                 android:text="⌖"
                 android:textColor="@color/white"
-                android:textSize="21sp" />
+                android:textSize="18sp" />
 
         </LinearLayout>
 
-        <!-- Mensagem no mapa -->
+        <!-- ================================================== -->
+        <!-- MENSAGEM SOBRE O MAPA                              -->
+        <!-- CORRIGIDA PARA NÃO SAIR DA TELA                    -->
+        <!-- ================================================== -->
 
         <TextView
             android:id="@+id/txtHint"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="65dp"
-            android:layout_marginBottom="12dp"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="62dp"
+            android:layout_marginBottom="10dp"
             android:background="#CC0D2137"
-            android:paddingStart="10dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="6dp"
+            android:gravity="center"
+            android:maxLines="2"
+            android:paddingStart="8dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="5dp"
             android:text="Toque no mapa para desenhar o perímetro"
+            android:textAlignment="center"
             android:textColor="@color/white"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
     </FrameLayout>
 
@@ -180,6 +188,7 @@
         android:layout_height="350dp"
         android:background="@color/white"
         android:fillViewport="true"
+        android:scrollbars="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
@@ -191,7 +200,7 @@
             android:paddingStart="9dp"
             android:paddingTop="8dp"
             android:paddingEnd="9dp"
-            android:paddingBottom="14dp">
+            android:paddingBottom="16dp">
 
             <!-- ================================================== -->
             <!-- PLANEJAMENTO                                      -->
@@ -205,7 +214,7 @@
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
-            <!-- Altura e velocidade -->
+            <!-- Altura / velocidade -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -251,7 +260,7 @@
 
             </LinearLayout>
 
-            <!-- Sobreposição + direção -->
+            <!-- Frontal / lateral / direção -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -317,7 +326,7 @@
 
             </LinearLayout>
 
-            <!-- Direção automática / grade -->
+            <!-- Direção automática / grade cruzada -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -356,8 +365,8 @@
                     android:layout_width="0dp"
                     android:layout_height="36dp"
                     android:layout_weight="1"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="2D AUTO"
                     android:textSize="10sp" />
@@ -371,8 +380,8 @@
                     android:layout_width="0dp"
                     android:layout_height="36dp"
                     android:layout_weight="1"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="CRUZADO"
                     android:textSize="10sp" />
@@ -380,13 +389,13 @@
             </LinearLayout>
 
             <!-- ================================================== -->
-            <!-- ROTA / ROTAÇÃO                                    -->
+            <!-- LINHAS DE VOO                                     -->
             <!-- ================================================== -->
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
+                android:layout_marginTop="8dp"
                 android:text="LINHAS DE VOO"
                 android:textColor="@color/navy"
                 android:textSize="12sp"
@@ -403,7 +412,7 @@
                 android:textColor="@color/text_primary"
                 android:textSize="11sp" />
 
-            <!-- Rotação e aplicar plano -->
+            <!-- Rotação -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -415,9 +424,9 @@
                     android:id="@+id/btnRotateLeft"
                     android:layout_width="0dp"
                     android:layout_height="38dp"
-                    android:layout_weight="0.8"
-                    android:minHeight="0dp"
+                    android:layout_weight="0.75"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="-15°"
                     android:textSize="11sp" />
@@ -432,8 +441,8 @@
                     android:layout_height="38dp"
                     android:layout_weight="2"
                     android:backgroundTint="@color/navy"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="APLICAR PLANO"
                     android:textColor="@color/white"
@@ -448,89 +457,136 @@
                     android:id="@+id/btnRotateRight"
                     android:layout_width="0dp"
                     android:layout_height="38dp"
-                    android:layout_weight="0.8"
-                    android:minHeight="0dp"
+                    android:layout_weight="0.75"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="+15°"
                     android:textSize="11sp" />
 
             </LinearLayout>
 
+            <!-- Inverter rota -->
+
+            <Button
+                android:id="@+id/btnReverseRoute"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="5dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="2dp"
+                android:text="⇄  INVERTER ROTA"
+                android:textSize="10sp" />
+
             <!-- ================================================== -->
-            <!-- AVANÇADO DJI                                      -->
+            <!-- AVANÇADO RECOLHÍVEL                                -->
             <!-- ================================================== -->
 
-            <TextView
+            <Button
+                android:id="@+id/btnToggleAdvanced"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="AVANÇADO — DJI FLY"
-                android:textColor="@color/text_secondary"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:layout_height="34dp"
+                android:layout_marginTop="7dp"
+                android:gravity="start|center_vertical"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="AVANÇADO ▼"
+                android:textSize="10sp" />
 
             <LinearLayout
+                android:id="@+id/advancedContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:orientation="horizontal">
+                android:layout_marginTop="4dp"
+                android:orientation="vertical"
+                android:visibility="gone">
 
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
+                <TextView
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Gimbal">
+                    android:text="CONFIGURAÇÕES DJI FLY"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inGimbal"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal|numberSigned"
-                        android:text="-90"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Máx. pts">
+                    android:layout_marginTop="3dp"
+                    android:orientation="horizontal">
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inMaxWaypoints"
-                        android:layout_width="match_parent"
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:inputType="number"
-                        android:text="190"
-                        android:textSize="12sp" />
+                        android:layout_weight="1"
+                        android:hint="Gimbal">
 
-                </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inGimbal"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal|numberSigned"
+                            android:text="-90"
+                            android:textSize="12sp" />
 
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Máx. pts">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inMaxWaypoints"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:text="190"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Cód. DJI">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inDroneEnum"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:text="68"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Cód. DJI">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inDroneEnum"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="number"
-                        android:text="68"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
+                    android:layout_marginTop="3dp"
+                    android:text="Gimbal -90° = câmera para baixo • Máx. pontos padrão = 190 • Código DJI Mini 5 Pro = 68"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="9sp" />
 
             </LinearLayout>
 
@@ -541,7 +597,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
+                android:layout_marginTop="8dp"
                 android:text="RESULTADOS"
                 android:textColor="@color/navy"
                 android:textSize="12sp"
@@ -554,18 +610,18 @@
                 android:layout_marginTop="3dp"
                 android:background="#EEF3F8"
                 android:padding="8dp"
-                android:text="Área: -- | GSD: -- | Fotos: -- | Tempo: --"
+                android:text="Área: -- | Perímetro: -- | GSD: -- | Fotos: -- | Tempo: --"
                 android:textColor="@color/text_primary"
                 android:textSize="11sp" />
 
             <!-- ================================================== -->
-            <!-- EXPORTAÇÃO                                        -->
+            <!-- MISSÃO DJI                                        -->
             <!-- ================================================== -->
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
+                android:layout_marginTop="8dp"
                 android:text="MISSÃO DJI"
                 android:textColor="@color/navy"
                 android:textSize="12sp"
@@ -583,8 +639,8 @@
                     android:layout_height="38dp"
                     android:layout_weight="1.2"
                     android:enabled="false"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="EXPORTAR KMZ"
                     android:textSize="10sp" />
@@ -599,8 +655,8 @@
                     android:layout_height="38dp"
                     android:layout_weight="1"
                     android:enabled="false"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="PRÉVIA KML"
                     android:textSize="10sp" />
@@ -614,8 +670,8 @@
                     android:layout_width="0dp"
                     android:layout_height="38dp"
                     android:layout_weight="0.9"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="GUIA DJI"
                     android:textSize="10sp" />
@@ -637,8 +693,8 @@
                     android:layout_width="0dp"
                     android:layout_height="36dp"
                     android:layout_weight="1"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="SALVAR"
                     android:textSize="10sp" />
@@ -652,8 +708,8 @@
                     android:layout_width="0dp"
                     android:layout_height="36dp"
                     android:layout_weight="1"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="PROJETOS"
                     android:textSize="10sp" />
@@ -668,8 +724,8 @@
                     android:layout_height="36dp"
                     android:layout_weight="1"
                     android:enabled="false"
-                    android:minHeight="0dp"
                     android:minWidth="0dp"
+                    android:minHeight="0dp"
                     android:padding="2dp"
                     android:text="COMPARTILHAR"
                     android:textSize="9sp" />

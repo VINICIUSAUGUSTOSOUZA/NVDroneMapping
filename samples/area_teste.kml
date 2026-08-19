@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Área de teste NV Drone Mapping</name>
+    <Placemark>
+      <name>Polígono de teste</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              -48.621000,-26.101000,0
+              -48.619800,-26.101000,0
+              -48.619800,-26.100300,0
+              -48.621000,-26.100300,0
+              -48.621000,-26.101000,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>

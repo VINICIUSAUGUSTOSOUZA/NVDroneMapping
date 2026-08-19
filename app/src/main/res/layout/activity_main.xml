@@ -20,9 +20,9 @@
         android:orientation="horizontal"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
             android:layout_width="0dp"
@@ -43,19 +43,17 @@
         android:id="@+id/mapContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
         app:layout_constraintBottom_toTopOf="@id/panel"
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/topBar">
+        app:layout_constraintEnd_toEndOf="parent">
 
         <org.osmdroid.views.MapView
             android:id="@+id/map"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- ================================================== -->
-        <!-- BOTÕES SUPERIORES DO MAPA                          -->
-        <!-- ================================================== -->
+        <!-- BOTÕES SUPERIORES -->
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -107,9 +105,7 @@
 
         </LinearLayout>
 
-        <!-- ================================================== -->
-        <!-- BOTÕES FLUTUANTES DIREITA                          -->
-        <!-- ================================================== -->
+        <!-- BOTÕES FLUTUANTES -->
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -119,8 +115,6 @@
             android:layout_marginBottom="10dp"
             android:gravity="center"
             android:orientation="vertical">
-
-            <!-- Enquadrar terreno -->
 
             <Button
                 android:id="@+id/btnFitBoundary"
@@ -134,8 +128,6 @@
                 android:text="▣"
                 android:textColor="@color/white"
                 android:textSize="17sp" />
-
-            <!-- Localização -->
 
             <Button
                 android:id="@+id/btnMyLocation"
@@ -151,10 +143,7 @@
 
         </LinearLayout>
 
-        <!-- ================================================== -->
-        <!-- MENSAGEM SOBRE O MAPA                              -->
-        <!-- CORRIGIDA PARA NÃO SAIR DA TELA                    -->
-        <!-- ================================================== -->
+        <!-- MENSAGEM DO MAPA -->
 
         <TextView
             android:id="@+id/txtHint"
@@ -167,12 +156,12 @@
             android:background="#CC0D2137"
             android:gravity="center"
             android:maxLines="2"
+            android:ellipsize="end"
             android:paddingStart="8dp"
             android:paddingTop="5dp"
             android:paddingEnd="8dp"
             android:paddingBottom="5dp"
             android:text="Toque no mapa para desenhar o perímetro"
-            android:textAlignment="center"
             android:textColor="@color/white"
             android:textSize="10sp" />
 
@@ -190,8 +179,8 @@
         android:fillViewport="true"
         android:scrollbars="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -214,7 +203,7 @@
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
-            <!-- Altura / velocidade -->
+            <!-- ALTURA / VELOCIDADE -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -260,7 +249,7 @@
 
             </LinearLayout>
 
-            <!-- Frontal / lateral / direção -->
+            <!-- SOBREPOSIÇÃO / DIREÇÃO -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -326,7 +315,7 @@
 
             </LinearLayout>
 
-            <!-- Direção automática / grade cruzada -->
+            <!-- OPÇÕES -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -353,7 +342,7 @@
 
             </LinearLayout>
 
-            <!-- Presets -->
+            <!-- PRESETS -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -412,7 +401,7 @@
                 android:textColor="@color/text_primary"
                 android:textSize="11sp" />
 
-            <!-- Rotação -->
+            <!-- ROTAÇÃO -->
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -466,7 +455,7 @@
 
             </LinearLayout>
 
-            <!-- Inverter rota -->
+            <!-- INVERTER ROTA -->
 
             <Button
                 android:id="@+id/btnReverseRoute"
@@ -480,7 +469,7 @@
                 android:textSize="10sp" />
 
             <!-- ================================================== -->
-            <!-- AVANÇADO RECOLHÍVEL                                -->
+            <!-- AVANÇADO                                          -->
             <!-- ================================================== -->
 
             <Button
@@ -518,6 +507,8 @@
                     android:layout_marginTop="3dp"
                     android:orientation="horizontal">
 
+                    <!-- GIMBAL -->
+
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -538,9 +529,7 @@
                         android:layout_width="5dp"
                         android:layout_height="1dp" />
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="_width="5dp"
-                        android:layout_height="1dp" />
+                    <!-- MÁXIMO DE PONTOS -->
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="0dp"
@@ -561,6 +550,8 @@
                     <Space
                         android:layout_width="5dp"
                         android:layout_height="1dp" />
+
+                    <!-- CÓDIGO DJI -->
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="0dp"
@@ -584,7 +575,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="3dp"
-                    android:text="Gimbal -90° = câmera para baixo • Máx. pontos padrão = 190 • Código DJI Mini 5 Pro = 68"
+                    android:text="Gimbal -90° = câmera para baixo • Máx. pontos = 190 • Código DJI = 68"
                     android:textColor="@color/text_secondary"
                     android:textSize="9sp" />
 

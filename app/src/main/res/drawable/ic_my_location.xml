@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="42dp"
+    android:height="42dp"
+    android:viewportWidth="42"
+    android:viewportHeight="42">
+
+    <!-- Círculo externo azul -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="
+            M21,1
+            A20,20 0,1 0,21,41
+            A20,20 0,1 0,21,1
+        " />
+
+    <!-- Borda branca interna -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M21,6
+            A15,15 0,1 0,21,36
+            A15,15 0,1 0,21,6
+        " />
+
+    <!-- Círculo azul interno -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="
+            M21,10
+            A11,11 0,1 0,21,32
+            A11,11 0,1 0,21,10
+        " />
+
+    <!-- Centro branco -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M21,16
+            A5,5 0,1 0,21,26
+            A5,5 0,1 0,21,16
+        " />
+
+    <!-- Ponto azul central -->
+    <path
+        android:fillColor="#0D47A1"
+        android:pathData="
+            M21,18
+            A3,3 0,1 0,21,24
+            A3,3 0,1 0,21,18
+        " />
+
+    <!-- Linha superior -->
+    <path
+        android:fillColor="#0D47A1"
+        android:pathData="
+            M19.5,1
+            L22.5,1
+            L22.5,9
+            L19.5,9
+            Z
+        " />
+
+    <!-- Linha inferior -->
+    <path
+        android:fillColor="#0D47A1"
+        android:pathData="
+            M19.5,33
+            L22.5,33
+            L22.5,41
+            L19.5,41
+            Z
+        " />
+
+    <!-- Linha esquerda -->
+    <path
+        android:fillColor="#0D47A1"
+        android:pathData="
+            M1,19.5
+            L9,19.5
+            L9,22.5
+            L1,22.5
+            Z
+        " />
+
+    <!-- Linha direita -->
+    <path
+        android:fillColor="#0D47A1"
+        android:pathData="
+            M33,19.5
+            L41,19.5
+            L41,22.5
+            L33,22.5
+            Z
+        " />
+
+</vector>

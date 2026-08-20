@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.DashPathEffect
 import android.graphics.drawable.BitmapDrawable
 import android.location.LocationManager
 import android.net.Uri
@@ -76,6 +77,10 @@ class MainActivity : AppCompatActivity() {
     private var preferredStartMarker: Marker? = null
     private var preferredStart: LatLng? = null
     private var selectingStartPoint = false
+
+    private var routeStartMarker: Marker? = null
+    private var routeEndMarker: Marker? = null
+    private var approachLineOverlay: Polyline? = null
 
     private var satelliteMode = false
     private var showReferenceLayer = true
@@ -1124,6 +1129,7 @@ class MainActivity : AppCompatActivity() {
 
         routeOverlays.clear()
         routeArrowMarkers.clear()
+        clearRouteEndpointOverlays()
 
         /*
          * PLANO DE VOO começa em CIANO.
@@ -1218,6 +1224,10 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+
+        redrawRouteEndpoints(
+            plan
+        )
 
         redrawPreferredStartMarker()
 
@@ -2117,6 +2127,8 @@ class MainActivity : AppCompatActivity() {
         routeOverlays.clear()
         routeArrowMarkers.clear()
 
+        clearRouteEndpointOverlays()
+
         binding.map.invalidate()
 
         binding.txtHint.text =
@@ -2586,6 +2598,15 @@ class MainActivity : AppCompatActivity() {
 
         preferredStartMarker?.isEnabled =
             showRouteLayer
+
+        routeStartMarker?.isEnabled =
+            showRouteLayer
+
+        routeEndMarker?.isEnabled =
+            showRouteLayer
+
+        approachLineOverlay?.isEnabled =
+            showRouteLayer
     }
 
     private fun redrawPreferredStartMarker() {
@@ -2597,28 +2618,52 @@ class MainActivity : AppCompatActivity() {
                 ?: return
 
         preferredStartMarker =
-            Marker(binding.map).apply {
-                position = GeoPoint(start.lat, start.lon)
-                title = "Início preferido do voo"
-                snippet = String.format(
-                    Locale.getDefault(),
-                    "Lat %.7f | Lon %.7f",
-                    start.lat,
-                    start.lon
-                )
+            Marker(
+                binding.map
+            ).apply {
+
+                position =
+                    GeoPoint(
+                        start.lat,
+                        start.lon
+                    )
+
+                title =
+                    "Partida do drone"
+
+                snippet =
+                    String.format(
+                        Locale.getDefault(),
+                        "Lat %.7f | Lon %.7f",
+                        start.lat,
+                        start.lon
+                    )
+
+                icon =
+                    createDroneStartIcon()
+
                 setAnchor(
                     Marker.ANCHOR_CENTER,
-                    Marker.ANCHOR_BOTTOM
+                    Marker.ANCHOR_CENTER
                 )
-                isDraggable = false
-                setOnMarkerClickListener { marker, _ ->
+
+                isDraggable =
+                    false
+
+                setOnMarkerClickListener {
+                        marker,
+                        _ ->
+
                     marker.showInfoWindow()
                     true
                 }
             }
 
         preferredStartMarker?.let {
-            binding.map.overlays.add(it)
+
+            binding.map.overlays.add(
+                it
+            )
         }
 
         applyLayerVisibility()
@@ -2633,6 +2678,458 @@ class MainActivity : AppCompatActivity() {
         preferredStartMarker = null
     }
 
+    private fun clearRouteEndpointOverlays() {
+
+        routeStartMarker?.let {
+            binding.map.overlays.remove(it)
+        }
+
+        routeEndMarker?.let {
+            binding.map.overlays.remove(it)
+        }
+
+        approachLineOverlay?.let {
+            binding.map.overlays.remove(it)
+        }
+
+        routeStartMarker = null
+        routeEndMarker = null
+        approachLineOverlay = null
+    }
+
+    private fun redrawRouteEndpoints(
+        currentPlan: MissionPlan
+    ) {
+
+        clearRouteEndpointOverlays()
+
+        if (
+            currentPlan.waypoints.isEmpty()
+        ) {
+            return
+        }
+
+        val routeStart =
+            currentPlan.waypoints.first()
+
+        val routeEnd =
+            currentPlan.waypoints.last()
+
+        /*
+         * Linha visual entre o local escolhido em INÍCIO
+         * e o primeiro waypoint real do mapeamento.
+         * Não altera o plano nem o KMZ exportado.
+         */
+        preferredStart?.let { departure ->
+
+            approachLineOverlay =
+                Polyline(
+                    binding.map
+                ).apply {
+
+                    setPoints(
+                        listOf(
+                            GeoPoint(
+                                departure.lat,
+                                departure.lon
+                            ),
+                            GeoPoint(
+                                routeStart.lat,
+                                routeStart.lon
+                            )
+                        )
+                    )
+
+                    outlinePaint.color =
+                        Color.rgb(
+                            46,
+                            125,
+                            50
+                        )
+
+                    outlinePaint.strokeWidth =
+                        4f
+
+                    val density =
+                        resources
+                            .displayMetrics
+                            .density
+
+                    outlinePaint.pathEffect =
+                        DashPathEffect(
+                            floatArrayOf(
+                                14f * density,
+                                9f * density
+                            ),
+                            0f
+                        )
+
+                    title =
+                        "Deslocamento até o início da rota"
+                }
+
+            approachLineOverlay?.let {
+                binding.map.overlays.add(it)
+            }
+        }
+
+        routeStartMarker =
+            Marker(
+                binding.map
+            ).apply {
+
+                position =
+                    GeoPoint(
+                        routeStart.lat,
+                        routeStart.lon
+                    )
+
+                title =
+                    "Início do trajeto"
+
+                snippet =
+                    String.format(
+                        Locale.getDefault(),
+                        "Lat %.7f | Lon %.7f",
+                        routeStart.lat,
+                        routeStart.lon
+                    )
+
+                icon =
+                    createRouteEndpointIcon(
+                        Color.rgb(
+                            46,
+                            125,
+                            50
+                        )
+                    )
+
+                setAnchor(
+                    Marker.ANCHOR_CENTER,
+                    Marker.ANCHOR_CENTER
+                )
+
+                setOnMarkerClickListener {
+                        marker,
+                        _ ->
+
+                    marker.showInfoWindow()
+                    true
+                }
+            }
+
+        routeEndMarker =
+            Marker(
+                binding.map
+            ).apply {
+
+                position =
+                    GeoPoint(
+                        routeEnd.lat,
+                        routeEnd.lon
+                    )
+
+                title =
+                    "Fim do trajeto"
+
+                snippet =
+                    String.format(
+                        Locale.getDefault(),
+                        "Lat %.7f | Lon %.7f",
+                        routeEnd.lat,
+                        routeEnd.lon
+                    )
+
+                icon =
+                    createRouteEndpointIcon(
+                        Color.rgb(
+                            211,
+                            47,
+                            47
+                        )
+                    )
+
+                setAnchor(
+                    Marker.ANCHOR_CENTER,
+                    Marker.ANCHOR_CENTER
+                )
+
+                setOnMarkerClickListener {
+                        marker,
+                        _ ->
+
+                    marker.showInfoWindow()
+                    true
+                }
+            }
+
+        routeStartMarker?.let {
+            binding.map.overlays.add(it)
+        }
+
+        routeEndMarker?.let {
+            binding.map.overlays.add(it)
+        }
+
+        applyLayerVisibility()
+        binding.map.invalidate()
+    }
+
+    private fun createRouteEndpointIcon(
+        color: Int
+    ): BitmapDrawable {
+
+        val density =
+            resources
+                .displayMetrics
+                .density
+
+        val size =
+            (22f * density)
+                .toInt()
+                .coerceAtLeast(22)
+
+        val radius =
+            6f * density
+
+        val bitmap =
+            Bitmap.createBitmap(
+                size,
+                size,
+                Bitmap.Config.ARGB_8888
+            )
+
+        val canvas =
+            Canvas(bitmap)
+
+        val paint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                this.color =
+                    color
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawCircle(
+            size / 2f,
+            size / 2f,
+            radius,
+            paint
+        )
+
+        paint.style =
+            Paint.Style.STROKE
+
+        paint.strokeWidth =
+            2f * density
+
+        paint.color =
+            Color.WHITE
+
+        canvas.drawCircle(
+            size / 2f,
+            size / 2f,
+            radius,
+            paint
+        )
+
+        return BitmapDrawable(
+            resources,
+            bitmap
+        )
+    }
+
+    private fun createDroneStartIcon():
+        BitmapDrawable {
+
+        val density =
+            resources
+                .displayMetrics
+                .density
+
+        val size =
+            (42f * density)
+                .toInt()
+                .coerceAtLeast(42)
+
+        val bitmap =
+            Bitmap.createBitmap(
+                size,
+                size,
+                Bitmap.Config.ARGB_8888
+            )
+
+        val canvas =
+            Canvas(bitmap)
+
+        val center =
+            size / 2f
+
+        val arm =
+            11f * density
+
+        val rotorRadius =
+            4.2f * density
+
+        val whitePaint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                color =
+                    Color.WHITE
+
+                style =
+                    Paint.Style.STROKE
+
+                strokeWidth =
+                    5f * density
+
+                strokeCap =
+                    Paint.Cap.ROUND
+            }
+
+        val dronePaint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                color =
+                    Color.rgb(
+                        13,
+                        33,
+                        55
+                    )
+
+                style =
+                    Paint.Style.STROKE
+
+                strokeWidth =
+                    2.4f * density
+
+                strokeCap =
+                    Paint.Cap.ROUND
+            }
+
+        val rotorCenters =
+            listOf(
+                center - arm to center - arm,
+                center + arm to center - arm,
+                center - arm to center + arm,
+                center + arm to center + arm
+            )
+
+        rotorCenters.forEach { rotor ->
+
+            canvas.drawLine(
+                center,
+                center,
+                rotor.first,
+                rotor.second,
+                whitePaint
+            )
+
+            canvas.drawCircle(
+                rotor.first,
+                rotor.second,
+                rotorRadius,
+                whitePaint
+            )
+        }
+
+        rotorCenters.forEach { rotor ->
+
+            canvas.drawLine(
+                center,
+                center,
+                rotor.first,
+                rotor.second,
+                dronePaint
+            )
+
+            canvas.drawCircle(
+                rotor.first,
+                rotor.second,
+                rotorRadius,
+                dronePaint
+            )
+        }
+
+        val bodyWhite =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                color =
+                    Color.WHITE
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        val bodyPaint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                color =
+                    Color.rgb(
+                        13,
+                        33,
+                        55
+                    )
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawCircle(
+            center,
+            center,
+            6f * density,
+            bodyWhite
+        )
+
+        canvas.drawCircle(
+            center,
+            center,
+            4f * density,
+            bodyPaint
+        )
+
+        val nosePaint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                color =
+                    Color.rgb(
+                        0,
+                        188,
+                        212
+                    )
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawCircle(
+            center,
+            center - 4f * density,
+            1.8f * density,
+            nosePaint
+        )
+
+        return BitmapDrawable(
+            resources,
+            bitmap
+        )
+    }
+
     private fun addDirectionArrows(
         part: List<LatLng>,
         color: Int,
@@ -2640,6 +3137,7 @@ class MainActivity : AppCompatActivity() {
     ) {
 
         if (part.size < 2) return
+
 
         val indexes = listOf(
             part.size / 4,
@@ -2865,15 +3363,9 @@ class MainActivity : AppCompatActivity() {
     private fun showConsentDialog() {
 
         val padding = (18f * resources.displayMetrics.density).toInt()
-
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(
-                padding,
-                padding / 2,
-                padding,
-                0
-            )
+            setPadding(padding, padding / 2, padding, 0)
         }
 
         val termsTextView = TextView(this)
@@ -2906,12 +3398,7 @@ class MainActivity : AppCompatActivity() {
             .create()
 
         dialog.setOnShowListener {
-
-            val positive =
-                dialog.getButton(
-                    AlertDialog.BUTTON_POSITIVE
-                )
-
+            val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             positive.isEnabled = false
 
             check.setOnCheckedChangeListener { _, checked ->
@@ -2919,39 +3406,20 @@ class MainActivity : AppCompatActivity() {
             }
 
             positive.setOnClickListener {
-
-                if (!check.isChecked) {
-                    return@setOnClickListener
-                }
+                if (!check.isChecked) return@setOnClickListener
 
                 getSharedPreferences(
                     "nv_drone_consent",
                     MODE_PRIVATE
-                )
-                    .edit()
-                    .putBoolean(
-                        "accepted",
-                        true
-                    )
-                    .putLong(
-                        "acceptedAtMs",
-                        System.currentTimeMillis()
-                    )
-                    .putString(
-                        "termsVersion",
-                        "1"
-                    )
-                    .putString(
-                        "appVersion",
-                        currentAppVersion()
-                    )
+                ).edit()
+                    .putBoolean("accepted", true)
+                    .putLong("acceptedAtMs", System.currentTimeMillis())
+                    .putString("termsVersion", "1")
+                    .putString("appVersion", currentAppVersion())
                     .apply()
 
                 dialog.dismiss()
-
-                showTutorial(
-                    0
-                )
+                showTutorial(0)
             }
         }
 
@@ -2959,128 +3427,62 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun currentAppVersion(): String {
-
         return runCatching {
-
-            packageManager
-                .getPackageInfo(
-                    packageName,
-                    0
-                )
-                .versionName
-                ?: "1.0.0"
-
-        }.getOrDefault(
-            "1.0.0"
-        )
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+        }.getOrDefault("1.0.0")
     }
 
-    private fun showTutorial(
-        step: Int
-    ) {
+    private fun showTutorial(step: Int) {
 
-        val steps =
-            listOf(
+        val steps = listOf(
+            "1/8 — Referência" to
+                "Use IMPORTAR REF para abrir KML, KMZ ou DXF. O arquivo importado é somente referência visual e não vira o quadro de voo automaticamente.",
+            "2/8 — Quadro de voo" to
+                "Toque no mapa para desenhar o QUADRO DE VOO. Os pins podem ser arrastados para ajustar os vértices. Toque em um pin para ver suas coordenadas.",
+            "3/8 — Início" to
+                "Use INÍCIO e depois toque no mapa próximo do lado onde deseja começar. O plano mantém a mesma geometria e prioriza o extremo mais próximo desse ponto.",
+            "4/8 — Gerar plano" to
+                "Defina altura, velocidade e sobreposições e toque em APLICAR PLANO. Use -15°, +15° e INVERTER sem alterar o quadro desenhado.",
+            "5/8 — Mapa e camadas" to
+                "SAT/MAP troca apenas o fundo do mapa. CAMADAS permite mostrar ou ocultar Referência, Quadro e Plano sem apagar os dados.",
+            "6/8 — Avançado" to
+                "Toque em AVANÇADO para expandir ou recolher os campos DJI de gimbal, máximo de pontos e código DJI.",
+            "7/8 — Conferência" to
+                "As setas sobre a rota mostram o sentido de deslocamento. Confira área, GSD, fotos, distância e tempo antes de exportar.",
+            "8/8 — Salvar e exportar" to
+                "SALVAR guarda referência, quadro, parâmetros, início preferido e o plano atual. EXPORTAR KMZ mostra um resumo antes de criar a missão. O GUIA DJI continua disponível para o fluxo de transferência."
+        )
 
-                "1/8 — Referência" to
-                    "Use IMPORTAR REF para abrir KML, KMZ ou DXF. O arquivo importado é somente referência visual e não vira o quadro de voo automaticamente.",
-
-                "2/8 — Quadro de voo" to
-                    "Toque no mapa para desenhar o QUADRO DE VOO. Os pins podem ser arrastados para ajustar os vértices. Toque em um pin para ver suas coordenadas.",
-
-                "3/8 — Início" to
-                    "Use INÍCIO e depois toque no mapa próximo do lado onde deseja começar. O plano mantém a mesma geometria e prioriza o extremo mais próximo desse ponto.",
-
-                "4/8 — Gerar plano" to
-                    "Defina altura, velocidade e sobreposições e toque em APLICAR PLANO. Use -15°, +15° e INVERTER sem alterar o quadro desenhado.",
-
-                "5/8 — Mapa e camadas" to
-                    "SAT/MAP troca apenas o fundo do mapa. CAMADAS permite mostrar ou ocultar Referência, Quadro e Plano sem apagar os dados.",
-
-                "6/8 — Avançado" to
-                    "Toque em AVANÇADO para expandir ou recolher os campos DJI de gimbal, máximo de pontos e código DJI.",
-
-                "7/8 — Conferência" to
-                    "As setas sobre a rota mostram o sentido de deslocamento. Confira área, GSD, fotos, distância e tempo antes de exportar.",
-
-                "8/8 — Salvar e exportar" to
-                    "SALVAR guarda referência, quadro, parâmetros, início preferido e o plano atual. EXPORTAR KMZ mostra um resumo antes de criar a missão. O GUIA DJI continua disponível para o fluxo de transferência."
-            )
-
-        if (
-            step !in steps.indices
-        ) {
-
+        if (step !in steps.indices) {
             markTutorialShown()
-
             return
         }
 
-        val current =
-            steps[
-                step
-            ]
+        val current = steps[step]
+        val last = step == steps.lastIndex
 
-        val last =
-            step ==
-                steps.lastIndex
-
-        AlertDialog.Builder(
-            this
-        )
-            .setTitle(
-                current.first
-            )
-            .setMessage(
-                current.second
-            )
-            .setPositiveButton(
-                if (
-                    last
-                ) {
-                    "CONCLUIR"
-                } else {
-                    "PRÓXIMO"
-                }
-            ) {
-                    _,
-                    _ ->
-
-                if (
-                    last
-                ) {
-
+        AlertDialog.Builder(this)
+            .setTitle(current.first)
+            .setMessage(current.second)
+            .setPositiveButton(if (last) "CONCLUIR" else "PRÓXIMO") { _, _ ->
+                if (last) {
                     markTutorialShown()
-
                 } else {
-
-                    showTutorial(
-                        step + 1
-                    )
+                    showTutorial(step + 1)
                 }
             }
-            .setNegativeButton(
-                "PULAR"
-            ) {
-                    _,
-                    _ ->
-
+            .setNegativeButton("PULAR") { _, _ ->
                 markTutorialShown()
             }
             .show()
     }
 
     private fun markTutorialShown() {
-
         getSharedPreferences(
             "nv_drone_consent",
             MODE_PRIVATE
-        )
-            .edit()
-            .putBoolean(
-                "tutorialShown",
-                true
-            )
+        ).edit()
+            .putBoolean("tutorialShown", true)
             .apply()
     }
 

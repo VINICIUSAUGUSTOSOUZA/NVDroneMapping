@@ -31,10 +31,9 @@ import com.nv.dronemapping.storage.ProjectStore
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
@@ -52,23 +51,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var store: ProjectStore
 
-    // O polígono importado é apenas uma REFERÊNCIA VISUAL.
     private val referenceBoundary = mutableListOf<LatLng>()
-
-    // O quadro de voo é sempre desenhado manualmente pelo usuário.
     private val flightBoundary = mutableListOf<LatLng>()
+
     private val flightVertexMarkers = mutableListOf<Marker>()
     private val routeOverlays = mutableListOf<Polyline>()
 
     private var referenceOverlay: Polygon? = null
     private var flightBoundaryOverlay: Polygon? = null
+
     private var plan: MissionPlan? = null
     private var pendingExportPart = 0
     private var userLocationMarker: Marker? = null
+
     private var satelliteMode = false
 
     private val satelliteTileSource by lazy {
-        object : OnlineTileSourceBase(
+        XYTileSource(
             "EsriWorldImagery",
             0,
             19,
@@ -77,21 +76,18 @@ class MainActivity : AppCompatActivity() {
             arrayOf(
                 "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"
             )
-        ) {
-            override fun getTileURLString(pMapTileIndex: Long): String {
-                val z = MapTileIndex.getZoom(pMapTileIndex)
-                val x = MapTileIndex.getX(pMapTileIndex)
-                val y = MapTileIndex.getY(pMapTileIndex)
-                return "${baseUrl}$z/$y/$x$mImageFilenameEnding"
-            }
-        }
+        )
     }
 
     private val importLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        registerForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri ->
+
             uri ?: return@registerForActivityResult
 
             runCatching {
+
                 contentResolver.takePersistableUriPermission(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -99,17 +95,30 @@ class MainActivity : AppCompatActivity() {
             }
 
             runCatching {
-                KmlImporter.importBoundary(contentResolver, uri)
+
+                KmlImporter.importBoundary(
+                    contentResolver,
+                    uri
+                )
+
             }.onSuccess { points ->
+
                 referenceBoundary.clear()
                 referenceBoundary.addAll(points)
-                redrawReference(fit = true)
-                toast(
-                    "Referência importada: ${points.size} vértices. " +
-                        "Agora desenhe o quadro de voo."
+
+                redrawReference(
+                    fit = true
                 )
+
+                toast(
+                    "Referência importada: ${points.size} vértices. Agora desenhe o quadro de voo."
+                )
+
             }.onFailure {
-                toast("Falha ao importar referência: ${it.message}")
+
+                toast(
+                    "Falha ao importar referência: ${it.message}"
+                )
             }
         }
 
@@ -120,22 +129,39 @@ class MainActivity : AppCompatActivity() {
             )
         ) { uri ->
 
-            val current = plan ?: return@registerForActivityResult
+            val current =
+                plan ?: return@registerForActivityResult
+
             uri ?: return@registerForActivityResult
 
             runCatching {
-                contentResolver.openOutputStream(uri)?.use { out ->
-                    KmzExporter.writeKmz(
-                        current,
-                        pendingExportPart,
-                        "NV_Mapping",
-                        out
+
+                contentResolver
+                    .openOutputStream(uri)
+                    ?.use { out ->
+
+                        KmzExporter.writeKmz(
+                            current,
+                            pendingExportPart,
+                            "NV_Mapping",
+                            out
+                        )
+                    }
+                    ?: error(
+                        "Não foi possível criar o arquivo"
                     )
-                } ?: error("Não foi possível criar o arquivo")
+
             }.onSuccess {
-                toast("Missão DJI salva com sucesso")
+
+                toast(
+                    "Missão DJI salva com sucesso"
+                )
+
             }.onFailure {
-                toast("Erro ao exportar: ${it.message}")
+
+                toast(
+                    "Erro ao exportar: ${it.message}"
+                )
             }
         }
 
@@ -146,20 +172,37 @@ class MainActivity : AppCompatActivity() {
             )
         ) { uri ->
 
-            val current = plan ?: return@registerForActivityResult
+            val current =
+                plan ?: return@registerForActivityResult
+
             uri ?: return@registerForActivityResult
 
             runCatching {
-                contentResolver.openOutputStream(uri)?.use { out ->
-                    writePreviewKml(
-                        current,
-                        out
+
+                contentResolver
+                    .openOutputStream(uri)
+                    ?.use { out ->
+
+                        writePreviewKml(
+                            current,
+                            out
+                        )
+                    }
+                    ?: error(
+                        "Não foi possível criar a prévia"
                     )
-                } ?: error("Não foi possível criar a prévia")
+
             }.onSuccess {
-                toast("Prévia KML salva")
+
+                toast(
+                    "Prévia KML salva"
+                )
+
             }.onFailure {
-                toast("Erro ao salvar prévia: ${it.message}")
+
+                toast(
+                    "Erro ao salvar prévia: ${it.message}"
+                )
             }
         }
 
@@ -168,29 +211,56 @@ class MainActivity : AppCompatActivity() {
             ActivityResultContracts.RequestMultiplePermissions()
         ) { grants ->
 
-            if (grants.values.any { it }) {
+            if (
+                grants.values.any { it }
+            ) {
+
                 locateUser()
+
             } else {
-                toast("Permissão de localização não concedida")
+
+                toast(
+                    "Permissão de localização não concedida"
+                )
             }
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
 
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        store = ProjectStore(this)
-
-        Configuration.getInstance().userAgentValue = packageName
-        Configuration.getInstance().load(
-            this,
-            getSharedPreferences(
-                "osmdroid",
-                MODE_PRIVATE
-            )
+        super.onCreate(
+            savedInstanceState
         )
+
+        binding =
+            ActivityMainBinding.inflate(
+                layoutInflater
+            )
+
+        setContentView(
+            binding.root
+        )
+
+        store =
+            ProjectStore(
+                this
+            )
+
+        Configuration
+            .getInstance()
+            .userAgentValue =
+            packageName
+
+        Configuration
+            .getInstance()
+            .load(
+                this,
+                getSharedPreferences(
+                    "osmdroid",
+                    MODE_PRIVATE
+                )
+            )
 
         setupMap()
         setupActions()
@@ -206,7 +276,9 @@ class MainActivity : AppCompatActivity() {
             TileSourceFactory.MAPNIK
         )
 
-        binding.map.setMultiTouchControls(true)
+        binding.map.setMultiTouchControls(
+            true
+        )
 
         binding.map.controller.setZoom(
             4.5
@@ -222,7 +294,8 @@ class MainActivity : AppCompatActivity() {
         val events =
             MapEventsOverlay(
 
-                object : MapEventsReceiver {
+                object :
+                    MapEventsReceiver {
 
                     override fun singleTapConfirmedHelper(
                         p: GeoPoint
@@ -263,7 +336,9 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnUndo.setOnClickListener {
 
-            if (flightBoundary.isNotEmpty()) {
+            if (
+                flightBoundary.isNotEmpty()
+            ) {
 
                 flightBoundary.removeLast()
 
@@ -285,6 +360,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnImport.setOnClickListener {
 
             importLauncher.launch(
+
                 arrayOf(
                     "application/vnd.google-earth.kml+xml",
                     "application/vnd.google-earth.kmz",
@@ -318,6 +394,11 @@ class MainActivity : AppCompatActivity() {
             rotateFlightLines(
                 15.0
             )
+        }
+
+        binding.btnInvert.setOnClickListener {
+
+            invertFlightDirection()
         }
 
         binding.btnExport.setOnClickListener {
@@ -384,7 +465,9 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnPreviewKml.setOnClickListener {
 
-            if (plan != null) {
+            if (
+                plan != null
+            ) {
 
                 showPreviewKmlMenu()
             }
@@ -399,7 +482,9 @@ class MainActivity : AppCompatActivity() {
     private fun setupSettingsBehavior() {
 
         binding.checkAutoBearing
-            .setOnCheckedChangeListener { _, checked ->
+            .setOnCheckedChangeListener {
+                    _,
+                    checked ->
 
                 binding.inBearing.isEnabled =
                     !checked
@@ -415,7 +500,9 @@ class MainActivity : AppCompatActivity() {
         deltaDeg: Double
     ) {
 
-        if (flightBoundary.size < 3) {
+        if (
+            flightBoundary.size < 3
+        ) {
 
             toast(
                 "Desenhe o quadro de voo antes de rotacionar as linhas"
@@ -472,11 +559,45 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun invertFlightDirection() {
+
+        if (
+            flightBoundary.size < 3
+        ) {
+
+            toast(
+                "Desenhe o quadro de voo antes de inverter"
+            )
+
+            return
+        }
+
+        flightBoundary.reverse()
+
+        invalidatePlan()
+
+        redrawBoundary(
+            false
+        )
+
+        updateStatsAreaOnly()
+
+        generateMission(
+            showToast = false
+        )
+
+        toast(
+            "Sentido do plano de voo invertido"
+        )
+    }
+
     private fun generateMission(
         showToast: Boolean = true
     ) {
 
-        if (flightBoundary.size < 3) {
+        if (
+            flightBoundary.size < 3
+        ) {
 
             toast(
                 "Desenhe o quadro de voo com pelo menos 3 vértices"
@@ -523,7 +644,9 @@ class MainActivity : AppCompatActivity() {
             )
 
             binding.txtHint.text =
-                if (generated.parts.size > 1) {
+                if (
+                    generated.parts.size > 1
+                ) {
 
                     "Plano aplicado: ${generated.parts.size} partes. Revise as linhas."
 
@@ -532,7 +655,9 @@ class MainActivity : AppCompatActivity() {
                     "Plano aplicado. Use -15° / +15° para rotacionar as linhas."
                 }
 
-            if (showToast) {
+            if (
+                showToast
+            ) {
 
                 toast(
                     "Plano de voo aplicado dentro do quadro manual"
@@ -565,7 +690,9 @@ class MainActivity : AppCompatActivity() {
                     )
                     ?.toDoubleOrNull()
 
-            if (v == null) {
+            if (
+                v == null
+            ) {
 
                 toast(
                     "Informe $label corretamente"
@@ -579,37 +706,43 @@ class MainActivity : AppCompatActivity() {
             value(
                 binding.inAltitude,
                 "a altura"
-            ) ?: return null
+            )
+                ?: return null
 
         val speed =
             value(
                 binding.inSpeed,
                 "a velocidade"
-            ) ?: return null
+            )
+                ?: return null
 
         val front =
             value(
                 binding.inFrontOverlap,
                 "a sobreposição frontal"
-            ) ?: return null
+            )
+                ?: return null
 
         val side =
             value(
                 binding.inSideOverlap,
                 "a sobreposição lateral"
-            ) ?: return null
+            )
+                ?: return null
 
         val bearing =
             value(
                 binding.inBearing,
                 "a direção"
-            ) ?: return null
+            )
+                ?: return null
 
         val gimbal =
             value(
                 binding.inGimbal,
                 "o ângulo do gimbal"
-            ) ?: return null
+            )
+                ?: return null
 
         val maxWaypoints =
             binding.inMaxWaypoints.text
@@ -734,6 +867,7 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
 
+                    // QUADRO DE VOO = LARANJA
                     outlinePaint.color =
                         Color.rgb(
                             255,
@@ -744,7 +878,6 @@ class MainActivity : AppCompatActivity() {
                     outlinePaint.strokeWidth =
                         5f
 
-                    // Sem preenchimento.
                     fillPaint.color =
                         Color.TRANSPARENT
                 }
@@ -775,12 +908,15 @@ class MainActivity : AppCompatActivity() {
                     title =
                         "Quadro ${index + 1}"
 
-                    icon =
-                        smallVertexIcon
+                    smallVertexIcon?.let {
+
+                        icon =
+                            it
+                    }
 
                     setAnchor(
                         Marker.ANCHOR_CENTER,
-                        Marker.ANCHOR_CENTER
+                        Marker.ANCHOR_BOTTOM
                     )
 
                     isDraggable =
@@ -873,13 +1009,17 @@ class MainActivity : AppCompatActivity() {
 
         routeOverlays.clear()
 
+        /*
+         * PLANO DE VOO começa em CIANO.
+         * Fica claramente diferente do quadro laranja.
+         */
         val colors =
             intArrayOf(
 
                 Color.rgb(
-                    255,
-                    102,
-                    0
+                    0,
+                    188,
+                    212
                 ),
 
                 Color.rgb(
@@ -1215,6 +1355,7 @@ class MainActivity : AppCompatActivity() {
                     which
 
                 exportLauncher.launch(
+
                     defaultKmzName(
                         which,
                         current.parts.size
@@ -1321,6 +1462,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
             startActivity(
+
                 Intent.createChooser(
                     intent,
                     "Compartilhar missão DJI"
@@ -1402,6 +1544,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 store.save(
+
                     SavedProject(
                         name,
                         flightBoundary.toList(),
@@ -1817,7 +1960,6 @@ class MainActivity : AppCompatActivity() {
                     outlinePaint.strokeWidth =
                         4f
 
-                    // Referência visual SEM preenchimento.
                     fillPaint.color =
                         Color.TRANSPARENT
                 }
@@ -1845,27 +1987,131 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createSmallVertexIcon():
+        BitmapDrawable? {
+
+        /*
+         * Usa o mesmo PIN padrão que já existia.
+         * Apenas reduz para 78% do tamanho original.
+         */
+
+        val original =
+            Marker(
+                binding.map
+            ).icon
+                ?: return null
+
+        val density =
+            resources.displayMetrics.density
+
+        val baseWidth =
+            if (
+                original.intrinsicWidth > 0
+            ) {
+
+                original.intrinsicWidth
+
+            } else {
+
+                (
+                    48f *
+                        density
+                    ).toInt()
+            }
+
+        val baseHeight =
+            if (
+                original.intrinsicHeight > 0
+            ) {
+
+                original.intrinsicHeight
+
+            } else {
+
+                (
+                    48f *
+                        density
+                    ).toInt()
+            }
+
+        val scale =
+            0.78f
+
+        val width =
+            (
+                baseWidth *
+                    scale
+                )
+                .toInt()
+                .coerceAtLeast(
+                    1
+                )
+
+        val height =
+            (
+                baseHeight *
+                    scale
+                )
+                .toInt()
+                .coerceAtLeast(
+                    1
+                )
+
+        val bitmap =
+            Bitmap.createBitmap(
+                width,
+                height,
+                Bitmap.Config.ARGB_8888
+            )
+
+        val canvas =
+            Canvas(
+                bitmap
+            )
+
+        original.setBounds(
+            0,
+            0,
+            width,
+            height
+        )
+
+        original.draw(
+            canvas
+        )
+
+        return BitmapDrawable(
+            resources,
+            bitmap
+        )
+    }
+
+    private fun createUserLocationDotIcon():
         BitmapDrawable {
 
         /*
-         * A imagem total do marcador continua maior
-         * para facilitar o toque/arraste.
-         *
-         * Porém o círculo visível é pequeno.
+         * LOCALIZAÇÃO ATUAL:
+         * pequeno ponto azul.
+         * Sem alvo.
          */
 
         val density =
             resources.displayMetrics.density
 
         val iconSize =
-            (34f * density)
+            (
+                22f *
+                    density
+                )
                 .toInt()
                 .coerceAtLeast(
-                    34
+                    22
                 )
 
         val dotRadius =
-            (5f * density)
+            (
+                5f *
+                    density
+                )
                 .coerceAtLeast(
                     5f
                 )
@@ -1889,9 +2135,9 @@ class MainActivity : AppCompatActivity() {
 
                 color =
                     Color.rgb(
-                        255,
-                        128,
-                        0
+                        33,
+                        150,
+                        243
                     )
 
                 style =
@@ -1909,7 +2155,10 @@ class MainActivity : AppCompatActivity() {
             Paint.Style.STROKE
 
         paint.strokeWidth =
-            (1.5f * density)
+            (
+                1.5f *
+                    density
+                )
                 .coerceAtLeast(
                     1.5f
                 )
@@ -2078,16 +2327,22 @@ class MainActivity : AppCompatActivity() {
                     which
                 ) {
 
-                    0 ->
+                    0 -> {
+
                         openPreviewKml()
+                    }
 
-                    1 ->
+                    1 -> {
+
                         sharePreviewKml()
+                    }
 
-                    2 ->
+                    2 -> {
+
                         previewLauncher.launch(
                             "NV_Mapping_preview.kml"
                         )
+                    }
                 }
             }
             .setNegativeButton(
@@ -2162,6 +2417,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
             startActivity(
+
                 Intent.createChooser(
                     intent,
                     "Abrir prévia KML com"
@@ -2209,6 +2465,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
             startActivity(
+
                 Intent.createChooser(
                     intent,
                     "Compartilhar prévia KML"
@@ -2298,39 +2555,16 @@ class MainActivity : AppCompatActivity() {
                 "<name>NV Drone Mapping - Prévia</name>"
             )
 
-            /*
-             * KML usa a ordem:
-             * AA BB GG RR
-             *
-             * A prévia usa apenas LineString.
-             * Não existe Polygon preenchido.
-             */
-
             writer.appendLine(
-                "<Style id=\"ref\">" +
-                    "<LineStyle>" +
-                    "<color>ffff7a00</color>" +
-                    "<width>3</width>" +
-                    "</LineStyle>" +
-                    "</Style>"
+                "<Style id=\"ref\"><LineStyle><color>ffff7a00</color><width>3</width></LineStyle></Style>"
             )
 
             writer.appendLine(
-                "<Style id=\"frame\">" +
-                    "<LineStyle>" +
-                    "<color>ff0080ff</color>" +
-                    "<width>4</width>" +
-                    "</LineStyle>" +
-                    "</Style>"
+                "<Style id=\"frame\"><LineStyle><color>ff0080ff</color><width>4</width></LineStyle></Style>"
             )
 
             writer.appendLine(
-                "<Style id=\"route\">" +
-                    "<LineStyle>" +
-                    "<color>ff00ffff</color>" +
-                    "<width>4</width>" +
-                    "</LineStyle>" +
-                    "</Style>"
+                "<Style id=\"route\"><LineStyle><color>ff00ffff</color><width>4</width></LineStyle></Style>"
             )
 
             if (
@@ -2342,23 +2576,19 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 writer.appendLine(
-                    "<name>Referência</name>" +
-                        "<styleUrl>#ref</styleUrl>"
+                    "<name>Referência</name><styleUrl>#ref</styleUrl>"
                 )
 
                 writer.appendLine(
-                    "<LineString>" +
-                        "<tessellate>1</tessellate>" +
-                        "<altitudeMode>clampToGround</altitudeMode>"
+                    "<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>"
                 )
 
                 writer.appendLine(
-                    "<coordinates>" +
+                    "<coordinates>${
                         closedCoords(
                             referenceBoundary
-                        ) +
-                        "</coordinates>" +
-                        "</LineString>"
+                        )
+                    }</coordinates></LineString>"
                 )
 
                 writer.appendLine(
@@ -2375,23 +2605,19 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 writer.appendLine(
-                    "<name>Quadro de voo</name>" +
-                        "<styleUrl>#frame</styleUrl>"
+                    "<name>Quadro de voo</name><styleUrl>#frame</styleUrl>"
                 )
 
                 writer.appendLine(
-                    "<LineString>" +
-                        "<tessellate>1</tessellate>" +
-                        "<altitudeMode>clampToGround</altitudeMode>"
+                    "<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>"
                 )
 
                 writer.appendLine(
-                    "<coordinates>" +
+                    "<coordinates>${
                         closedCoords(
                             flightBoundary
-                        ) +
-                        "</coordinates>" +
-                        "</LineString>"
+                        )
+                    }</coordinates></LineString>"
                 )
 
                 writer.appendLine(
@@ -2412,23 +2638,19 @@ class MainActivity : AppCompatActivity() {
                     )
 
                     writer.appendLine(
-                        "<name>Traçado ${index + 1}</name>" +
-                            "<styleUrl>#route</styleUrl>"
+                        "<name>Traçado ${index + 1}</name><styleUrl>#route</styleUrl>"
                     )
 
                     writer.appendLine(
-                        "<LineString>" +
-                            "<tessellate>1</tessellate>" +
-                            "<altitudeMode>clampToGround</altitudeMode>"
+                        "<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>"
                     )
 
                     writer.appendLine(
-                        "<coordinates>" +
+                        "<coordinates>${
                             coords(
                                 part
-                            ) +
-                            "</coordinates>" +
-                            "</LineString>"
+                            )
+                        }</coordinates></LineString>"
                     )
 
                     writer.appendLine(
@@ -2468,6 +2690,7 @@ class MainActivity : AppCompatActivity() {
         } else {
 
             locationPermissionLauncher.launch(
+
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
@@ -2546,11 +2769,12 @@ class MainActivity : AppCompatActivity() {
                             last.accuracy
                         )
 
+                    /*
+                     * SUA LOCALIZAÇÃO =
+                     * PONTO AZUL PEQUENO.
+                     */
                     icon =
-                        ContextCompat.getDrawable(
-                            this@MainActivity,
-                            R.drawable.ic_my_location
-                        )
+                        createUserLocationDotIcon()
 
                     setAnchor(
                         Marker.ANCHOR_CENTER,

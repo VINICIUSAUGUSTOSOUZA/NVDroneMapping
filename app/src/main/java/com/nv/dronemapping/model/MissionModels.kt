@@ -56,5 +56,8 @@ data class SavedProject(
     val name: String,
     val boundary: List<LatLng>,
     val settings: MissionSettings,
-    val savedAtMs: Long
+    val savedAtMs: Long,
+    val referenceBoundary: List<LatLng> = emptyList(),
+    val preferredStart: LatLng? = null,
+    val plan: MissionPlan? = null
 )

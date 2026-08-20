@@ -396,6 +396,16 @@
 
             </LinearLayout>
 
+            <Button
+                android:id="@+id/btnInvert"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="4dp"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="INVERTER"
+                android:textSize="10sp" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

@@ -3,12 +3,14 @@ package com.nv.dronemapping
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
-import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,13 +31,17 @@ import com.nv.dronemapping.storage.ProjectStore
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.views.overlay.Polyline
 import java.io.File
+import java.io.OutputStream
+import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,25 +52,43 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var store: ProjectStore
 
-    private val boundary = mutableListOf<LatLng>()
-    private val vertexMarkers = mutableListOf<Marker>()
+    // O polígono importado é apenas uma REFERÊNCIA VISUAL.
+    private val referenceBoundary = mutableListOf<LatLng>()
+
+    // O quadro de voo é sempre desenhado manualmente pelo usuário.
+    private val flightBoundary = mutableListOf<LatLng>()
+    private val flightVertexMarkers = mutableListOf<Marker>()
     private val routeOverlays = mutableListOf<Polyline>()
 
-    private var boundaryOverlay: Polygon? = null
+    private var referenceOverlay: Polygon? = null
+    private var flightBoundaryOverlay: Polygon? = null
     private var plan: MissionPlan? = null
     private var pendingExportPart = 0
-
     private var userLocationMarker: Marker? = null
-    private var routeStartMarker: Marker? = null
-    private var routeEndMarker: Marker? = null
+    private var satelliteMode = false
 
-    private var currentProjectName: String? = null
+    private val satelliteTileSource by lazy {
+        object : OnlineTileSourceBase(
+            "EsriWorldImagery",
+            0,
+            19,
+            256,
+            ".jpg",
+            arrayOf(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"
+            )
+        ) {
+            override fun getTileURLString(pMapTileIndex: Long): String {
+                val z = MapTileIndex.getZoom(pMapTileIndex)
+                val x = MapTileIndex.getX(pMapTileIndex)
+                val y = MapTileIndex.getY(pMapTileIndex)
+                return "${baseUrl}$z/$y/$x$mImageFilenameEnding"
+            }
+        }
+    }
 
     private val importLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.OpenDocument()
-        ) { uri ->
-
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri ?: return@registerForActivityResult
 
             runCatching {
@@ -75,32 +99,18 @@ class MainActivity : AppCompatActivity() {
             }
 
             runCatching {
-                KmlImporter.importBoundary(
-                    contentResolver,
-                    uri
+                KmlImporter.importBoundary(contentResolver, uri)
+            }.onSuccess { points ->
+                referenceBoundary.clear()
+                referenceBoundary.addAll(points)
+                redrawReference(fit = true)
+                toast(
+                    "Referência importada: ${points.size} vértices. " +
+                        "Agora desenhe o quadro de voo."
                 )
+            }.onFailure {
+                toast("Falha ao importar referência: ${it.message}")
             }
-                .onSuccess { points ->
-
-                    currentProjectName = null
-
-                    boundary.clear()
-                    boundary.addAll(points)
-
-                    invalidatePlan()
-                    redrawBoundary(true)
-                    updateStatsAreaOnly()
-
-                    toast(
-                        "Perímetro importado: ${points.size} vértices"
-                    )
-                }
-                .onFailure {
-
-                    toast(
-                        "Falha ao importar: ${it.message}"
-                    )
-                }
         }
 
     private val exportLauncher =
@@ -110,41 +120,23 @@ class MainActivity : AppCompatActivity() {
             )
         ) { uri ->
 
-            val current =
-                plan ?: return@registerForActivityResult
-
+            val current = plan ?: return@registerForActivityResult
             uri ?: return@registerForActivityResult
 
             runCatching {
-
-                contentResolver
-                    .openOutputStream(uri)
-                    ?.use { out ->
-
-                        KmzExporter.writeKmz(
-                            current,
-                            pendingExportPart,
-                            currentProjectName ?: "NV_Mapping",
-                            out
-                        )
-                    }
-                    ?: error(
-                        "Não foi possível criar o arquivo"
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    KmzExporter.writeKmz(
+                        current,
+                        pendingExportPart,
+                        "NV_Mapping",
+                        out
                     )
-
+                } ?: error("Não foi possível criar o arquivo")
+            }.onSuccess {
+                toast("Missão DJI salva com sucesso")
+            }.onFailure {
+                toast("Erro ao exportar: ${it.message}")
             }
-                .onSuccess {
-
-                    toast(
-                        "Missão DJI salva com sucesso"
-                    )
-                }
-                .onFailure {
-
-                    toast(
-                        "Erro ao exportar: ${it.message}"
-                    )
-                }
         }
 
     private val previewLauncher =
@@ -154,39 +146,21 @@ class MainActivity : AppCompatActivity() {
             )
         ) { uri ->
 
-            val current =
-                plan ?: return@registerForActivityResult
-
+            val current = plan ?: return@registerForActivityResult
             uri ?: return@registerForActivityResult
 
             runCatching {
-
-                contentResolver
-                    .openOutputStream(uri)
-                    ?.use { out ->
-
-                        KmzExporter.writePreviewKml(
-                            current,
-                            out
-                        )
-                    }
-                    ?: error(
-                        "Não foi possível criar a prévia"
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    writePreviewKml(
+                        current,
+                        out
                     )
-
+                } ?: error("Não foi possível criar a prévia")
+            }.onSuccess {
+                toast("Prévia KML salva")
+            }.onFailure {
+                toast("Erro ao salvar prévia: ${it.message}")
             }
-                .onSuccess {
-
-                    toast(
-                        "Prévia KML salva"
-                    )
-                }
-                .onFailure {
-
-                    toast(
-                        "Erro ao salvar prévia: ${it.message}"
-                    )
-                }
         }
 
     private val locationPermissionLauncher =
@@ -194,56 +168,29 @@ class MainActivity : AppCompatActivity() {
             ActivityResultContracts.RequestMultiplePermissions()
         ) { grants ->
 
-            if (
-                grants.values.any { it }
-            ) {
-
+            if (grants.values.any { it }) {
                 locateUser()
-
             } else {
-
-                toast(
-                    "Permissão de localização não concedida"
-                )
+                toast("Permissão de localização não concedida")
             }
         }
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-        super.onCreate(
-            savedInstanceState
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        store = ProjectStore(this)
+
+        Configuration.getInstance().userAgentValue = packageName
+        Configuration.getInstance().load(
+            this,
+            getSharedPreferences(
+                "osmdroid",
+                MODE_PRIVATE
+            )
         )
-
-        binding =
-            ActivityMainBinding.inflate(
-                layoutInflater
-            )
-
-        setContentView(
-            binding.root
-        )
-
-        store =
-            ProjectStore(
-                this
-            )
-
-        Configuration
-            .getInstance()
-            .userAgentValue =
-            packageName
-
-        Configuration
-            .getInstance()
-            .load(
-                this,
-                getSharedPreferences(
-                    "osmdroid",
-                    MODE_PRIVATE
-                )
-            )
 
         setupMap()
         setupActions()
@@ -259,9 +206,7 @@ class MainActivity : AppCompatActivity() {
             TileSourceFactory.MAPNIK
         )
 
-        binding.map.setMultiTouchControls(
-            true
-        )
+        binding.map.setMultiTouchControls(true)
 
         binding.map.controller.setZoom(
             4.5
@@ -276,14 +221,14 @@ class MainActivity : AppCompatActivity() {
 
         val events =
             MapEventsOverlay(
-                object :
-                    MapEventsReceiver {
+
+                object : MapEventsReceiver {
 
                     override fun singleTapConfirmedHelper(
                         p: GeoPoint
                     ): Boolean {
 
-                        boundary +=
+                        flightBoundary +=
                             LatLng(
                                 p.latitude,
                                 p.longitude
@@ -292,7 +237,7 @@ class MainActivity : AppCompatActivity() {
                         invalidatePlan()
 
                         redrawBoundary(
-                            false
+                            fit = false
                         )
 
                         updateStatsAreaOnly()
@@ -316,32 +261,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupActions() {
 
-        binding.btnUndo
-            .setOnClickListener {
+        binding.btnUndo.setOnClickListener {
 
-                if (
-                    boundary.isNotEmpty()
-                ) {
+            if (flightBoundary.isNotEmpty()) {
 
-                    boundary.removeLast()
-
-                    invalidatePlan()
-
-                    redrawBoundary(
-                        false
-                    )
-
-                    updateStatsAreaOnly()
-                }
-            }
-
-        binding.btnClear
-            .setOnClickListener {
-
-                boundary.clear()
-
-                currentProjectName =
-                    null
+                flightBoundary.removeLast()
 
                 invalidatePlan()
 
@@ -351,137 +275,131 @@ class MainActivity : AppCompatActivity() {
 
                 updateStatsAreaOnly()
             }
+        }
 
-        binding.btnImport
-            .setOnClickListener {
+        binding.btnClear.setOnClickListener {
 
-                importLauncher.launch(
-                    arrayOf(
-                        "application/vnd.google-earth.kml+xml",
-                        "application/vnd.google-earth.kmz",
-                        "application/zip",
-                        "application/octet-stream",
-                        "text/xml",
-                        "text/plain"
-                    )
+            showClearDialog()
+        }
+
+        binding.btnImport.setOnClickListener {
+
+            importLauncher.launch(
+                arrayOf(
+                    "application/vnd.google-earth.kml+xml",
+                    "application/vnd.google-earth.kmz",
+                    "application/zip",
+                    "application/octet-stream",
+                    "text/xml",
+                    "text/plain"
                 )
-            }
+            )
+        }
 
-        binding.btnGenerate
-            .setOnClickListener {
+        binding.btnMapType.setOnClickListener {
 
-                generateMission()
-            }
+            toggleMapType()
+        }
 
-        binding.btnRotateLeft
-            .setOnClickListener {
+        binding.btnGenerate.setOnClickListener {
 
-                rotateFlightLines(
-                    -15.0
-                )
-            }
+            generateMission()
+        }
 
-        binding.btnRotateRight
-            .setOnClickListener {
+        binding.btnRotateLeft.setOnClickListener {
 
-                rotateFlightLines(
-                    15.0
-                )
-            }
+            rotateFlightLines(
+                -15.0
+            )
+        }
 
-        binding.btnReverseRoute
-            .setOnClickListener {
+        binding.btnRotateRight.setOnClickListener {
 
-                reverseRoute()
-            }
+            rotateFlightLines(
+                15.0
+            )
+        }
 
-        binding.btnExport
-            .setOnClickListener {
+        binding.btnExport.setOnClickListener {
 
-                showExportReview()
-            }
+            choosePartAndExport()
+        }
 
-        binding.btnShare
-            .setOnClickListener {
+        binding.btnShare.setOnClickListener {
 
-                shareMission()
-            }
+            shareMission()
+        }
 
-        binding.btnSaveProject
-            .setOnClickListener {
+        binding.btnSaveProject.setOnClickListener {
 
-                showSaveProjectDialog()
-            }
+            showSaveProjectDialog()
+        }
 
-        binding.btnOpenProject
-            .setOnClickListener {
+        binding.btnOpenProject.setOnClickListener {
 
-                showProjectsDialog()
-            }
+            showProjectsDialog()
+        }
 
-        binding.btnMyLocation
-            .setOnClickListener {
+        binding.btnMyLocation.setOnClickListener {
 
-                requestLocationAndLocate()
-            }
+            requestLocationAndLocate()
+        }
 
-        binding.btnFitBoundary
-            .setOnClickListener {
+        binding.btnFitBoundary.setOnClickListener {
 
-                if (
-                    boundary.isNotEmpty()
-                ) {
+            when {
+
+                flightBoundary.isNotEmpty() -> {
 
                     fitToPoints(
-                        boundary
+                        flightBoundary
                     )
+                }
 
-                } else {
+                referenceBoundary.isNotEmpty() -> {
+
+                    fitToPoints(
+                        referenceBoundary
+                    )
+                }
+
+                else -> {
 
                     toast(
-                        "Desenhe ou importe um perímetro primeiro"
+                        "Importe uma referência ou desenhe o quadro de voo"
                     )
                 }
             }
+        }
 
-        binding.btnPreset2d
-            .setOnClickListener {
+        binding.btnPreset2d.setOnClickListener {
 
-                apply2dPreset()
+            apply2dPreset()
+        }
+
+        binding.btnPreset3d.setOnClickListener {
+
+            apply3dPreset()
+        }
+
+        binding.btnPreviewKml.setOnClickListener {
+
+            if (plan != null) {
+
+                showPreviewKmlMenu()
             }
+        }
 
-        binding.btnPreset3d
-            .setOnClickListener {
+        binding.btnDjiGuide.setOnClickListener {
 
-                apply3dPreset()
-            }
-
-        binding.btnPreviewKml
-            .setOnClickListener {
-
-                if (
-                    plan != null
-                ) {
-
-                    previewLauncher.launch(
-                        defaultPreviewName()
-                    )
-                }
-            }
-
-        binding.btnDjiGuide
-            .setOnClickListener {
-
-                showDjiGuide()
-            }
+            showDjiGuide()
+        }
     }
 
     private fun setupSettingsBehavior() {
 
         binding.checkAutoBearing
-            .setOnCheckedChangeListener {
-                    _,
-                    checked ->
+            .setOnCheckedChangeListener { _, checked ->
 
                 binding.inBearing.isEnabled =
                     !checked
@@ -491,69 +409,41 @@ class MainActivity : AppCompatActivity() {
 
         binding.inBearing.isEnabled =
             !binding.checkAutoBearing.isChecked
-
-        binding.btnToggleAdvanced
-            .setOnClickListener {
-
-                val opening =
-                    binding
-                        .advancedContainer
-                        .visibility !=
-                        View.VISIBLE
-
-                binding
-                    .advancedContainer
-                    .visibility =
-                    if (
-                        opening
-                    ) {
-                        View.VISIBLE
-                    } else {
-                        View.GONE
-                    }
-
-                binding
-                    .btnToggleAdvanced
-                    .text =
-                    if (
-                        opening
-                    ) {
-                        "AVANÇADO ▲"
-                    } else {
-                        "AVANÇADO ▼"
-                    }
-            }
     }
 
     private fun rotateFlightLines(
         deltaDeg: Double
     ) {
 
-        if (
-            boundary.size < 3
-        ) {
+        if (flightBoundary.size < 3) {
 
             toast(
-                "Desenhe ou importe o perímetro antes de rotacionar as linhas"
+                "Desenhe o quadro de voo antes de rotacionar as linhas"
             )
 
             return
         }
 
         val startingBearing =
-            plan
-                ?.stats
-                ?.effectiveBearingDeg
-                ?: binding
-                    .inBearing
-                    .text
-                    ?.toString()
-                    ?.replace(
-                        ',',
-                        '.'
-                    )
-                    ?.toDoubleOrNull()
-                ?: 0.0
+            when {
+
+                plan != null -> {
+
+                    plan!!.stats.effectiveBearingDeg
+                }
+
+                else -> {
+
+                    binding.inBearing.text
+                        ?.toString()
+                        ?.replace(
+                            ',',
+                            '.'
+                        )
+                        ?.toDoubleOrNull()
+                        ?: 0.0
+                }
+            }
 
         val newBearing =
             normalizeBearing(
@@ -561,22 +451,16 @@ class MainActivity : AppCompatActivity() {
                     deltaDeg
             )
 
-        binding
-            .checkAutoBearing
-            .isChecked =
+        binding.checkAutoBearing.isChecked =
             false
 
-        binding
-            .inBearing
-            .setText(
-                trimNumber(
-                    newBearing
-                )
+        binding.inBearing.setText(
+            trimNumber(
+                newBearing
             )
+        )
 
-        binding
-            .inBearing
-            .isEnabled =
+        binding.inBearing.isEnabled =
             true
 
         updateBearingStatus(
@@ -584,58 +468,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         generateMission(
-            false
-        )
-    }
-
-    private fun reverseRoute() {
-
-        val current =
-            plan
-
-        if (
-            current == null
-        ) {
-
-            toast(
-                "Aplique o plano de voo antes de inverter a rota"
-            )
-
-            return
-        }
-
-        val reversedParts =
-            current
-                .parts
-                .asReversed()
-                .map {
-                    it.asReversed()
-                }
-
-        val reversed =
-            current.copy(
-                waypoints =
-                    reversedParts.flatten(),
-                parts =
-                    reversedParts
-            )
-
-        plan =
-            reversed
-
-        drawRoute(
-            reversed
-        )
-
-        updateStats(
-            reversed
-        )
-
-        binding.txtHint.text =
-            "Rota invertida: início e fim foram trocados"
-
-        toast(
-            "Rota invertida"
+            showToast = false
         )
     }
 
@@ -643,12 +476,10 @@ class MainActivity : AppCompatActivity() {
         showToast: Boolean = true
     ) {
 
-        if (
-            boundary.size < 3
-        ) {
+        if (flightBoundary.size < 3) {
 
             toast(
-                "Desenhe ou importe um perímetro com pelo menos 3 vértices"
+                "Desenhe o quadro de voo com pelo menos 3 vértices"
             )
 
             return
@@ -661,67 +492,60 @@ class MainActivity : AppCompatActivity() {
         runCatching {
 
             GridPlanner.plan(
-                boundary.toList(),
+                flightBoundary.toList(),
                 settings
             )
 
-        }
-            .onSuccess { generated ->
+        }.onSuccess { generated ->
 
-                plan =
-                    generated
+            plan =
+                generated
 
-                binding.btnExport.isEnabled =
-                    true
+            binding.btnExport.isEnabled =
+                true
 
-                binding.btnShare.isEnabled =
-                    true
+            binding.btnShare.isEnabled =
+                true
 
-                binding.btnPreviewKml.isEnabled =
-                    true
+            binding.btnPreviewKml.isEnabled =
+                true
 
-                drawRoute(
-                    generated
-                )
+            drawRoute(
+                generated
+            )
 
-                updateStats(
-                    generated
-                )
+            updateStats(
+                generated
+            )
 
-                updateBearingStatus(
-                    generated
-                        .stats
-                        .effectiveBearingDeg
-                )
+            updateBearingStatus(
+                generated.stats.effectiveBearingDeg
+            )
 
-                binding.txtHint.text =
-                    if (
-                        generated.parts.size > 1
-                    ) {
+            binding.txtHint.text =
+                if (generated.parts.size > 1) {
 
-                        "Plano aplicado: ${generated.parts.size} partes. Revise as linhas."
+                    "Plano aplicado: ${generated.parts.size} partes. Revise as linhas."
 
-                    } else {
+                } else {
 
-                        "Plano aplicado. Use -15° / +15° para rotacionar as linhas."
-                    }
-
-                if (
-                    showToast
-                ) {
-
-                    toast(
-                        "Plano de voo aplicado sobre o polígono"
-                    )
+                    "Plano aplicado. Use -15° / +15° para rotacionar as linhas."
                 }
-            }
-            .onFailure {
+
+            if (showToast) {
 
                 toast(
-                    it.message
-                        ?: "Erro ao gerar missão"
+                    "Plano de voo aplicado dentro do quadro manual"
                 )
             }
+
+        }.onFailure {
+
+            toast(
+                it.message
+                    ?: "Erro ao gerar missão"
+            )
+        }
     }
 
     private fun readSettings():
@@ -733,8 +557,7 @@ class MainActivity : AppCompatActivity() {
         ): Double? {
 
             val v =
-                edit
-                    .text
+                edit.text
                     ?.toString()
                     ?.replace(
                         ',',
@@ -742,9 +565,7 @@ class MainActivity : AppCompatActivity() {
                     )
                     ?.toDoubleOrNull()
 
-            if (
-                v == null
-            ) {
+            if (v == null) {
 
                 toast(
                     "Informe $label corretamente"
@@ -758,55 +579,45 @@ class MainActivity : AppCompatActivity() {
             value(
                 binding.inAltitude,
                 "a altura"
-            )
-                ?: return null
+            ) ?: return null
 
         val speed =
             value(
                 binding.inSpeed,
                 "a velocidade"
-            )
-                ?: return null
+            ) ?: return null
 
         val front =
             value(
                 binding.inFrontOverlap,
                 "a sobreposição frontal"
-            )
-                ?: return null
+            ) ?: return null
 
         val side =
             value(
                 binding.inSideOverlap,
                 "a sobreposição lateral"
-            )
-                ?: return null
+            ) ?: return null
 
         val bearing =
             value(
                 binding.inBearing,
                 "a direção"
-            )
-                ?: return null
+            ) ?: return null
 
         val gimbal =
             value(
                 binding.inGimbal,
                 "o ângulo do gimbal"
-            )
-                ?: return null
+            ) ?: return null
 
         val maxWaypoints =
-            binding
-                .inMaxWaypoints
-                .text
+            binding.inMaxWaypoints.text
                 ?.toString()
                 ?.toIntOrNull()
 
         val droneEnum =
-            binding
-                .inDroneEnum
-                .text
+            binding.inDroneEnum.text
                 ?.toString()
                 ?.toIntOrNull()
 
@@ -846,32 +657,40 @@ class MainActivity : AppCompatActivity() {
         }
 
         return MissionSettings(
+
             altitudeM =
                 altitude,
+
             speedMs =
                 speed,
+
             frontOverlapPct =
                 front,
+
             sideOverlapPct =
                 side,
+
             bearingDeg =
                 bearing,
+
             autoBearing =
-                binding
-                    .checkAutoBearing
-                    .isChecked,
+                binding.checkAutoBearing.isChecked,
+
             crossHatch =
-                binding
-                    .checkCrossHatch
-                    .isChecked,
+                binding.checkCrossHatch.isChecked,
+
             gimbalPitchDeg =
                 gimbal,
+
             maxWaypointsPerMission =
                 maxWaypoints,
+
             droneEnumValue =
                 droneEnum,
+
             finishAction =
                 "goHome",
+
             rcLostAction =
                 "goBack"
         )
@@ -881,39 +700,33 @@ class MainActivity : AppCompatActivity() {
         fit: Boolean
     ) {
 
-        boundaryOverlay
-            ?.let {
+        flightBoundaryOverlay?.let {
 
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
+            binding.map.overlays.remove(
+                it
+            )
+        }
 
-        vertexMarkers
-            .forEach {
+        flightVertexMarkers.forEach {
 
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
+            binding.map.overlays.remove(
+                it
+            )
+        }
 
-        vertexMarkers.clear()
+        flightVertexMarkers.clear()
 
         if (
-            boundary.size >= 2
+            flightBoundary.size >= 2
         ) {
 
-            boundaryOverlay =
+            flightBoundaryOverlay =
                 Polygon(
                     binding.map
                 ).apply {
 
                     points =
-                        boundary.map {
+                        flightBoundary.map {
 
                             GeoPoint(
                                 it.lat,
@@ -923,201 +736,170 @@ class MainActivity : AppCompatActivity() {
 
                     outlinePaint.color =
                         Color.rgb(
-                            13,
-                            93,
-                            165
+                            255,
+                            128,
+                            0
                         )
 
                     outlinePaint.strokeWidth =
                         5f
 
+                    // Sem preenchimento.
                     fillPaint.color =
-                        Color.argb(
-                            45,
-                            47,
-                            128,
-                            237
-                        )
+                        Color.TRANSPARENT
                 }
 
-            binding.map
-                .overlays
-                .add(
-                    boundaryOverlay
-                )
+            binding.map.overlays.add(
+                flightBoundaryOverlay
+            )
         }
 
-        boundary
-            .forEachIndexed {
-                    index,
-                    p ->
+        val smallVertexIcon =
+            createSmallVertexIcon()
 
-                val marker =
-                    Marker(
-                        binding.map
-                    ).apply {
+        flightBoundary.forEachIndexed {
+                index,
+                p ->
 
-                        position =
-                            GeoPoint(
-                                p.lat,
-                                p.lon
-                            )
+            val marker =
+                Marker(
+                    binding.map
+                ).apply {
 
-                        title =
-                            "Vértice ${index + 1}"
-
-                        setAnchor(
-                            Marker.ANCHOR_CENTER,
-                            Marker.ANCHOR_BOTTOM
+                    position =
+                        GeoPoint(
+                            p.lat,
+                            p.lon
                         )
 
-                        isDraggable =
-                            true
+                    title =
+                        "Quadro ${index + 1}"
 
-                        setOnMarkerDragListener(
-                            object :
-                                Marker.OnMarkerDragListener {
+                    icon =
+                        smallVertexIcon
 
-                                override fun onMarkerDrag(
-                                    marker: Marker?
-                                ) = Unit
+                    setAnchor(
+                        Marker.ANCHOR_CENTER,
+                        Marker.ANCHOR_CENTER
+                    )
 
-                                override fun onMarkerDragStart(
-                                    marker: Marker?
-                                ) = Unit
+                    isDraggable =
+                        true
 
-                                override fun onMarkerDragEnd(
-                                    marker: Marker?
-                                ) {
+                    setOnMarkerDragListener(
 
-                                    marker
-                                        ?: return
+                        object :
+                            Marker.OnMarkerDragListener {
 
-                                    boundary[index] =
-                                        LatLng(
-                                            marker
-                                                .position
-                                                .latitude,
-                                            marker
-                                                .position
-                                                .longitude
-                                        )
+                            override fun onMarkerDrag(
+                                marker: Marker?
+                            ) = Unit
 
-                                    invalidatePlan()
+                            override fun onMarkerDragStart(
+                                marker: Marker?
+                            ) = Unit
 
-                                    redrawBoundary(
-                                        false
+                            override fun onMarkerDragEnd(
+                                marker: Marker?
+                            ) {
+
+                                marker
+                                    ?: return
+
+                                flightBoundary[index] =
+                                    LatLng(
+                                        marker.position.latitude,
+                                        marker.position.longitude
                                     )
 
-                                    updateStatsAreaOnly()
-                                }
+                                invalidatePlan()
+
+                                redrawBoundary(
+                                    false
+                                )
+
+                                updateStatsAreaOnly()
                             }
-                        )
-                    }
-
-                vertexMarkers +=
-                    marker
-
-                binding.map
-                    .overlays
-                    .add(
-                        marker
+                        }
                     )
-            }
+                }
 
-        userLocationMarker
-            ?.let {
+            flightVertexMarkers +=
+                marker
 
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
+            binding.map.overlays.add(
+                marker
+            )
+        }
 
-                binding.map
-                    .overlays
-                    .add(
-                        it
-                    )
-            }
+        redrawReference(
+            fit = false
+        )
+
+        userLocationMarker?.let {
+
+            binding.map.overlays.remove(
+                it
+            )
+
+            binding.map.overlays.add(
+                it
+            )
+        }
 
         binding.map.invalidate()
 
         if (
             fit &&
-            boundary.isNotEmpty()
+            flightBoundary.isNotEmpty()
         ) {
 
             fitToPoints(
-                boundary
+                flightBoundary
             )
         }
     }
 
     private fun drawRoute(
-        missionPlan: MissionPlan
+        plan: MissionPlan
     ) {
 
-        routeOverlays
-            .forEach {
+        routeOverlays.forEach {
 
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
+            binding.map.overlays.remove(
+                it
+            )
+        }
 
         routeOverlays.clear()
 
-        routeStartMarker
-            ?.let {
-
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
-
-        routeEndMarker
-            ?.let {
-
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
-
-        routeStartMarker =
-            null
-
-        routeEndMarker =
-            null
-
         val colors =
             intArrayOf(
+
                 Color.rgb(
                     255,
                     102,
                     0
                 ),
+
                 Color.rgb(
                     156,
                     39,
                     176
                 ),
+
                 Color.rgb(
                     0,
                     150,
                     136
                 ),
+
                 Color.rgb(
                     211,
                     47,
                     47
                 ),
+
                 Color.rgb(
                     0,
                     121,
@@ -1125,164 +907,62 @@ class MainActivity : AppCompatActivity() {
                 )
             )
 
-        missionPlan
-            .parts
-            .forEachIndexed {
-                    idx,
-                    part ->
+        plan.parts.forEachIndexed {
+                idx,
+                part ->
 
-                val line =
-                    Polyline(
-                        binding.map
-                    ).apply {
+            val line =
+                Polyline(
+                    binding.map
+                ).apply {
 
-                        setPoints(
-                            part.map {
+                    setPoints(
 
-                                GeoPoint(
-                                    it.lat,
-                                    it.lon
-                                )
-                            }
-                        )
+                        part.map {
 
-                        outlinePaint.color =
-                            colors[
-                                idx %
-                                    colors.size
-                            ]
-
-                        outlinePaint.strokeWidth =
-                            6f
-
-                        title =
-                            "Missão ${idx + 1}/${missionPlan.parts.size}"
-                    }
-
-                routeOverlays +=
-                    line
-
-                binding.map
-                    .overlays
-                    .add(
-                        line
-                    )
-            }
-
-        missionPlan
-            .waypoints
-            .firstOrNull()
-            ?.let { first ->
-
-                routeStartMarker =
-                    Marker(
-                        binding.map
-                    ).apply {
-
-                        position =
                             GeoPoint(
-                                first.lat,
-                                first.lon
+                                it.lat,
+                                it.lon
                             )
-
-                        title =
-                            "INÍCIO DA MISSÃO"
-
-                        snippet =
-                            "Primeiro ponto da rota"
-
-                        icon =
-                            createCircleDrawable(
-                                Color.rgb(
-                                    25,
-                                    135,
-                                    84
-                                ),
-                                Color.WHITE,
-                                18,
-                                2
-                            )
-
-                        setAnchor(
-                            Marker.ANCHOR_CENTER,
-                            Marker.ANCHOR_CENTER
-                        )
-                    }
-
-                binding.map
-                    .overlays
-                    .add(
-                        routeStartMarker
-                    )
-            }
-
-        missionPlan
-            .waypoints
-            .lastOrNull()
-            ?.let { last ->
-
-                routeEndMarker =
-                    Marker(
-                        binding.map
-                    ).apply {
-
-                        position =
-                            GeoPoint(
-                                last.lat,
-                                last.lon
-                            )
-
-                        title =
-                            "FIM DA MISSÃO"
-
-                        snippet =
-                            "Último ponto da rota"
-
-                        icon =
-                            createCircleDrawable(
-                                Color.rgb(
-                                    211,
-                                    47,
-                                    47
-                                ),
-                                Color.WHITE,
-                                18,
-                                2
-                            )
-
-                        setAnchor(
-                            Marker.ANCHOR_CENTER,
-                            Marker.ANCHOR_CENTER
-                        )
-                    }
-
-                binding.map
-                    .overlays
-                    .add(
-                        routeEndMarker
-                    )
-            }
-
-        userLocationMarker
-            ?.let {
-
-                binding.map
-                    .overlays
-                    .remove(
-                        it
+                        }
                     )
 
-                binding.map
-                    .overlays
-                    .add(
-                        it
-                    )
-            }
+                    outlinePaint.color =
+                        colors[
+                            idx %
+                                colors.size
+                        ]
+
+                    outlinePaint.strokeWidth =
+                        6f
+
+                    title =
+                        "Missão ${idx + 1}/${plan.parts.size}"
+                }
+
+            routeOverlays +=
+                line
+
+            binding.map.overlays.add(
+                line
+            )
+        }
+
+        userLocationMarker?.let {
+
+            binding.map.overlays.remove(
+                it
+            )
+
+            binding.map.overlays.add(
+                it
+            )
+        }
 
         binding.map.invalidate()
 
         fitToPoints(
-            missionPlan.boundary
+            plan.boundary
         )
     }
 
@@ -1297,30 +977,41 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val north =
+            points.maxOf {
+                it.lat
+            }
+
+        val south =
+            points.minOf {
+                it.lat
+            }
+
+        val east =
+            points.maxOf {
+                it.lon
+            }
+
+        val west =
+            points.minOf {
+                it.lon
+            }
+
         val box =
             BoundingBox(
-                points.maxOf {
-                    it.lat
-                },
-                points.maxOf {
-                    it.lon
-                },
-                points.minOf {
-                    it.lat
-                },
-                points.minOf {
-                    it.lon
-                }
+                north,
+                east,
+                south,
+                west
             )
 
         binding.map.post {
 
-            binding.map
-                .zoomToBoundingBox(
-                    box,
-                    true,
-                    80
-                )
+            binding.map.zoomToBoundingBox(
+                box,
+                true,
+                80
+            )
         }
     }
 
@@ -1328,11 +1019,11 @@ class MainActivity : AppCompatActivity() {
 
         val area =
             if (
-                boundary.size >= 3
+                flightBoundary.size >= 3
             ) {
 
                 GeoMath.polygonAreaM2(
-                    boundary
+                    flightBoundary
                 )
 
             } else {
@@ -1340,41 +1031,58 @@ class MainActivity : AppCompatActivity() {
                 0.0
             }
 
-        val perimeter =
-            boundaryPerimeterM()
-
         binding.txtStats.text =
             if (
                 area > 0
             ) {
 
-                "Área: ${formatArea(area)} | Perímetro: ${formatDistance(perimeter)} | Toque em APLICAR PLANO"
+                "Quadro: ${formatArea(area)} | Toque em APLICAR PLANO"
 
             } else {
 
-                "Área: -- | Perímetro: -- | GSD: -- | Fotos: -- | Tempo: --"
+                "Quadro: -- | GSD: -- | Fotos: -- | Tempo: --"
             }
     }
 
     private fun updateStats(
-        missionPlan: MissionPlan
+        plan: MissionPlan
     ) {
 
         val s =
-            missionPlan.stats
+            plan.stats
 
         val minutes =
             ceil(
                 s.estimatedFlightSeconds /
                     60.0
-            )
-                .toInt()
+            ).toInt()
+
+        val distance =
+            if (
+                s.routeDistanceM >= 1000
+            ) {
+
+                String.format(
+                    Locale.getDefault(),
+                    "%.2f km",
+                    s.routeDistanceM /
+                        1000.0
+                )
+
+            } else {
+
+                String.format(
+                    Locale.getDefault(),
+                    "%.0f m",
+                    s.routeDistanceM
+                )
+            }
 
         binding.txtStats.text =
             buildString {
 
                 append(
-                    "Área: ${formatArea(s.areaM2)} | Perímetro: ${formatDistance(boundaryPerimeterM())}\n"
+                    "Área: ${formatArea(s.areaM2)}\n"
                 )
 
                 append(
@@ -1397,7 +1105,7 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 append(
-                    "Fotos: ${s.photoCount} | Rota: ${formatDistance(s.routeDistanceM)} | Tempo: ~${minutes} min"
+                    "Fotos: ${s.photoCount} | Rota: $distance | Tempo: ~${minutes} min"
                 )
 
                 if (
@@ -1405,7 +1113,7 @@ class MainActivity : AppCompatActivity() {
                 ) {
 
                     append(
-                        "\nDJI: ${s.partCount} partes de missão"
+                        "\nDJI: ${s.partCount} missões"
                     )
                 }
             }
@@ -1416,14 +1124,10 @@ class MainActivity : AppCompatActivity() {
     ) {
 
         if (
-            binding
-                .checkAutoBearing
-                .isChecked
+            binding.checkAutoBearing.isChecked
         ) {
 
-            binding
-                .txtBearingStatus
-                .text =
+            binding.txtBearingStatus.text =
                 if (
                     effectiveBearing != null
                 ) {
@@ -1443,9 +1147,7 @@ class MainActivity : AppCompatActivity() {
 
             val bearing =
                 effectiveBearing
-                    ?: binding
-                        .inBearing
-                        .text
+                    ?: binding.inBearing.text
                         ?.toString()
                         ?.replace(
                             ',',
@@ -1454,9 +1156,7 @@ class MainActivity : AppCompatActivity() {
                         ?.toDoubleOrNull()
                     ?: 0.0
 
-            binding
-                .txtBearingStatus
-                .text =
+            binding.txtBearingStatus.text =
                 String.format(
                     Locale.getDefault(),
                     "Linhas: %.0f° — use -15° / +15° para rotacionar",
@@ -1467,151 +1167,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showExportReview() {
-
-        val current =
-            plan ?: return
-
-        val s =
-            current.stats
-
-        val settings =
-            current.settings
-
-        val minutes =
-            ceil(
-                s.estimatedFlightSeconds /
-                    60.0
-            )
-                .toInt()
-
-        val warnings =
-            mutableListOf<String>()
-
-        if (
-            settings.altitudeM < 20.0
-        ) {
-
-            warnings +=
-                "• Altura baixa: confira obstáculos e segurança do local."
-        }
-
-        if (
-            settings.frontOverlapPct < 70.0
-        ) {
-
-            warnings +=
-                "• Sobreposição frontal abaixo de 70%."
-        }
-
-        if (
-            settings.sideOverlapPct < 60.0
-        ) {
-
-            warnings +=
-                "• Sobreposição lateral abaixo de 60%."
-        }
-
-        if (
-            settings.speedMs > 10.0
-        ) {
-
-            warnings +=
-                "• Velocidade alta para mapeamento fotogramétrico."
-        }
-
-        if (
-            s.partCount > 1
-        ) {
-
-            warnings +=
-                "• A missão será dividida em ${s.partCount} arquivos/partes."
-        }
-
-        val message =
-            buildString {
-
-                append(
-                    "Área: ${formatArea(s.areaM2)}\n"
-                )
-
-                append(
-                    "Altura: ${trimNumber(settings.altitudeM)} m\n"
-                )
-
-                append(
-                    "Velocidade: ${trimNumber(settings.speedMs)} m/s\n"
-                )
-
-                append(
-                    "Sobreposição: ${trimNumber(settings.frontOverlapPct)}% / ${trimNumber(settings.sideOverlapPct)}%\n"
-                )
-
-                append(
-                    "Gimbal: ${trimNumber(settings.gimbalPitchDeg)}°\n"
-                )
-
-                append(
-                    "Fotos: ${s.photoCount}\n"
-                )
-
-                append(
-                    "Rota: ${formatDistance(s.routeDistanceM)}\n"
-                )
-
-                append(
-                    "Tempo estimado: ~${minutes} min\n"
-                )
-
-                append(
-                    "Final: retornar para casa (RTH)\n"
-                )
-
-                if (
-                    warnings.isNotEmpty()
-                ) {
-
-                    append(
-                        "\nATENÇÃO\n"
-                    )
-
-                    append(
-                        warnings.joinToString(
-                            "\n"
-                        )
-                    )
-                }
-            }
-
-        AlertDialog
-            .Builder(
-                this
-            )
-            .setTitle(
-                "Confirmar exportação DJI"
-            )
-            .setMessage(
-                message
-            )
-            .setPositiveButton(
-                "GERAR KMZ"
-            ) {
-                    _,
-                    _ ->
-
-                choosePartAndExport()
-            }
-            .setNegativeButton(
-                "CANCELAR",
-                null
-            )
-            .show()
-    }
-
     private fun choosePartAndExport() {
 
         val current =
-            plan ?: return
+            plan
+                ?: return
 
         if (
             current.parts.size == 1
@@ -1631,19 +1191,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         val labels =
-            current
-                .parts
-                .indices
+            current.parts.indices
                 .map { i ->
 
                     "Parte ${i + 1}/${current.parts.size} — ${current.parts[i].size} waypoints"
+
                 }
                 .toTypedArray()
 
-        AlertDialog
-            .Builder(
-                this
-            )
+        AlertDialog.Builder(
+            this
+        )
             .setTitle(
                 "Qual missão deseja exportar?"
             )
@@ -1673,7 +1231,8 @@ class MainActivity : AppCompatActivity() {
     private fun shareMission() {
 
         val current =
-            plan ?: return
+            plan
+                ?: return
 
         runCatching {
 
@@ -1687,40 +1246,35 @@ class MainActivity : AppCompatActivity() {
                 }
 
             val uris =
-                current
-                    .parts
-                    .mapIndexed {
-                            index,
-                            _ ->
+                current.parts.mapIndexed {
+                        index,
+                        _ ->
 
-                        val file =
-                            File(
-                                dir,
-                                defaultKmzName(
-                                    index,
-                                    current.parts.size
-                                )
+                    val file =
+                        File(
+                            dir,
+                            defaultKmzName(
+                                index,
+                                current.parts.size
                             )
+                        )
 
-                        file
-                            .outputStream()
-                            .use { out ->
+                    file.outputStream().use {
 
-                                KmzExporter.writeKmz(
-                                    current,
-                                    index,
-                                    currentProjectName
-                                        ?: "NV_Mapping",
-                                    out
-                                )
-                            }
-
-                        FileProvider.getUriForFile(
-                            this,
-                            "$packageName.fileprovider",
-                            file
+                        KmzExporter.writeKmz(
+                            current,
+                            index,
+                            "NV_Mapping",
+                            it
                         )
                     }
+
+                    FileProvider.getUriForFile(
+                        this,
+                        "$packageName.fileprovider",
+                        file
+                    )
+                }
 
             val intent =
                 if (
@@ -1773,23 +1327,22 @@ class MainActivity : AppCompatActivity() {
                 )
             )
 
-        }
-            .onFailure {
+        }.onFailure {
 
-                toast(
-                    "Erro ao compartilhar: ${it.message}"
-                )
-            }
+            toast(
+                "Erro ao compartilhar: ${it.message}"
+            )
+        }
     }
 
     private fun showSaveProjectDialog() {
 
         if (
-            boundary.size < 3
+            flightBoundary.size < 3
         ) {
 
             toast(
-                "Desenhe um perímetro antes de salvar"
+                "Desenhe o quadro de voo antes de salvar"
             )
 
             return
@@ -1804,25 +1357,22 @@ class MainActivity : AppCompatActivity() {
                     "Nome do projeto"
 
                 setText(
-                    currentProjectName
-                        ?: "Mapeamento ${
-                            SimpleDateFormat(
-                                "dd-MM HHmm",
-                                Locale.getDefault()
-                            )
-                                .format(
-                                    Date()
-                                )
-                        }"
+                    "Mapeamento ${
+                        SimpleDateFormat(
+                            "dd-MM HHmm",
+                            Locale.getDefault()
+                        ).format(
+                            Date()
+                        )
+                    }"
                 )
 
                 selectAll()
             }
 
-        AlertDialog
-            .Builder(
-                this
-            )
+        AlertDialog.Builder(
+            this
+        )
             .setTitle(
                 "Salvar projeto"
             )
@@ -1836,8 +1386,7 @@ class MainActivity : AppCompatActivity() {
                     _ ->
 
                 val name =
-                    input
-                        .text
+                    input.text
                         .toString()
                         .trim()
 
@@ -1855,14 +1404,11 @@ class MainActivity : AppCompatActivity() {
                 store.save(
                     SavedProject(
                         name,
-                        boundary.toList(),
+                        flightBoundary.toList(),
                         settings,
                         System.currentTimeMillis()
                     )
                 )
-
-                currentProjectName =
-                    name
 
                 toast(
                     "Projeto salvo"
@@ -1892,28 +1438,25 @@ class MainActivity : AppCompatActivity() {
         }
 
         val labels =
-            projects
-                .map { p ->
+            projects.map { p ->
 
-                    val date =
-                        SimpleDateFormat(
-                            "dd/MM/yyyy HH:mm",
-                            Locale.getDefault()
+                val date =
+                    SimpleDateFormat(
+                        "dd/MM/yyyy HH:mm",
+                        Locale.getDefault()
+                    ).format(
+                        Date(
+                            p.savedAtMs
                         )
-                            .format(
-                                Date(
-                                    p.savedAtMs
-                                )
-                            )
+                    )
 
-                    "${p.name}\n$date"
-                }
-                .toTypedArray()
+                "${p.name}\n$date"
 
-        AlertDialog
-            .Builder(
-                this
-            )
+            }.toTypedArray()
+
+        AlertDialog.Builder(
+            this
+        )
             .setTitle(
                 "Projetos salvos"
             )
@@ -1951,16 +1494,13 @@ class MainActivity : AppCompatActivity() {
     ) {
 
         val names =
-            projects
-                .map {
-                    it.name
-                }
-                .toTypedArray()
+            projects.map {
+                it.name
+            }.toTypedArray()
 
-        AlertDialog
-            .Builder(
-                this
-            )
+        AlertDialog.Builder(
+            this
+        )
             .setTitle(
                 "Excluir projeto"
             )
@@ -1970,10 +1510,9 @@ class MainActivity : AppCompatActivity() {
                     _,
                     which ->
 
-                AlertDialog
-                    .Builder(
-                        this
-                    )
+                AlertDialog.Builder(
+                    this
+                )
                     .setTitle(
                         "Excluir ${projects[which].name}?"
                     )
@@ -1984,9 +1523,7 @@ class MainActivity : AppCompatActivity() {
                             _ ->
 
                         store.delete(
-                            projects[
-                                which
-                            ].name
+                            projects[which].name
                         )
 
                         toast(
@@ -2006,13 +1543,16 @@ class MainActivity : AppCompatActivity() {
         project: SavedProject
     ) {
 
-        currentProjectName =
-            project.name
+        flightBoundary.clear()
 
-        boundary.clear()
-
-        boundary.addAll(
+        flightBoundary.addAll(
             project.boundary
+        )
+
+        referenceBoundary.clear()
+
+        redrawReference(
+            false
         )
 
         applySettings(
@@ -2122,7 +1662,9 @@ class MainActivity : AppCompatActivity() {
             false
 
         invalidatePlan()
+
         updateBearingStatus()
+
         updateStatsAreaOnly()
 
         toast(
@@ -2159,7 +1701,9 @@ class MainActivity : AppCompatActivity() {
             true
 
         invalidatePlan()
+
         updateBearingStatus()
+
         updateStatsAreaOnly()
 
         toast(
@@ -2169,21 +1713,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun showDjiGuide() {
 
-        AlertDialog
-            .Builder(
-                this
-            )
+        AlertDialog.Builder(
+            this
+        )
             .setTitle(
                 "Levar a missão ao DJI Fly"
             )
             .setMessage(
-                "1. Desenhe ou importe o perímetro.\n\n" +
-                    "2. Toque em APLICAR PLANO para desenhar as linhas sobre o polígono.\n\n" +
-                    "3. Use -15° / +15° para rotacionar e INVERTER ROTA para trocar início e fim.\n\n" +
-                    "4. Revise a rota e exporte o KMZ DJI.\n\n" +
-                    "5. No DJI Fly, crie e salve uma missão Waypoint temporária.\n\n" +
-                    "6. Substitua o KMZ da missão temporária pelo arquivo exportado pelo NV Drone Mapping.\n\n" +
-                    "7. Reabra a missão e confira rota, altura, RTH, gimbal e ações antes de iniciar.\n\n" +
+
+                "1. Importe KML/KMZ apenas como referência visual, se quiser.\n\n" +
+
+                    "2. Desenhe manualmente o QUADRO DE VOO sobre o mapa.\n\n" +
+
+                    "3. Toque em APLICAR PLANO para gerar as linhas dentro do quadro.\n\n" +
+
+                    "4. Se quiser mudar o sentido das passadas, use -15° ou +15°.\n\n" +
+
+                    "5. Revise a rota e exporte o KMZ DJI.\n\n" +
+
+                    "6. No DJI Fly, crie e salve uma missão Waypoint temporária.\n\n" +
+
+                    "7. No armazenamento do aparelho/controle, substitua o KMZ dessa missão pelo KMZ exportado pelo NV Drone Mapping.\n\n" +
+
+                    "8. Reabra a missão no DJI Fly e CONFIRA rota, altura, RTH, gimbal e ações de foto antes de iniciar.\n\n" +
+
                     "Faça o primeiro teste em área aberta e pequena."
             )
             .setPositiveButton(
@@ -2207,71 +1760,707 @@ class MainActivity : AppCompatActivity() {
         binding.btnPreviewKml.isEnabled =
             false
 
-        routeOverlays
-            .forEach {
+        routeOverlays.forEach {
 
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
+            binding.map.overlays.remove(
+                it
+            )
+        }
 
         routeOverlays.clear()
-
-        routeStartMarker
-            ?.let {
-
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
-
-        routeEndMarker
-            ?.let {
-
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
-
-        routeStartMarker =
-            null
-
-        routeEndMarker =
-            null
 
         binding.map.invalidate()
 
         binding.txtHint.text =
-            "Toque no mapa para desenhar o perímetro"
+            "Toque no mapa para desenhar o QUADRO DE VOO"
+    }
+
+    private fun redrawReference(
+        fit: Boolean
+    ) {
+
+        referenceOverlay?.let {
+
+            binding.map.overlays.remove(
+                it
+            )
+        }
+
+        referenceOverlay =
+            null
+
+        if (
+            referenceBoundary.size >= 2
+        ) {
+
+            referenceOverlay =
+                Polygon(
+                    binding.map
+                ).apply {
+
+                    points =
+                        referenceBoundary.map {
+
+                            GeoPoint(
+                                it.lat,
+                                it.lon
+                            )
+                        }
+
+                    outlinePaint.color =
+                        Color.rgb(
+                            0,
+                            122,
+                            255
+                        )
+
+                    outlinePaint.strokeWidth =
+                        4f
+
+                    // Referência visual SEM preenchimento.
+                    fillPaint.color =
+                        Color.TRANSPARENT
+                }
+
+            referenceOverlay?.let {
+
+                binding.map.overlays.add(
+                    0,
+                    it
+                )
+            }
+        }
+
+        binding.map.invalidate()
+
+        if (
+            fit &&
+            referenceBoundary.isNotEmpty()
+        ) {
+
+            fitToPoints(
+                referenceBoundary
+            )
+        }
+    }
+
+    private fun createSmallVertexIcon():
+        BitmapDrawable {
+
+        /*
+         * A imagem total do marcador continua maior
+         * para facilitar o toque/arraste.
+         *
+         * Porém o círculo visível é pequeno.
+         */
+
+        val density =
+            resources.displayMetrics.density
+
+        val iconSize =
+            (34f * density)
+                .toInt()
+                .coerceAtLeast(
+                    34
+                )
+
+        val dotRadius =
+            (5f * density)
+                .coerceAtLeast(
+                    5f
+                )
+
+        val bitmap =
+            Bitmap.createBitmap(
+                iconSize,
+                iconSize,
+                Bitmap.Config.ARGB_8888
+            )
+
+        val canvas =
+            Canvas(
+                bitmap
+            )
+
+        val paint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                color =
+                    Color.rgb(
+                        255,
+                        128,
+                        0
+                    )
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.drawCircle(
+            iconSize / 2f,
+            iconSize / 2f,
+            dotRadius,
+            paint
+        )
+
+        paint.style =
+            Paint.Style.STROKE
+
+        paint.strokeWidth =
+            (1.5f * density)
+                .coerceAtLeast(
+                    1.5f
+                )
+
+        paint.color =
+            Color.WHITE
+
+        canvas.drawCircle(
+            iconSize / 2f,
+            iconSize / 2f,
+            dotRadius,
+            paint
+        )
+
+        return BitmapDrawable(
+            resources,
+            bitmap
+        )
+    }
+
+    private fun showClearDialog() {
+
+        val options =
+            arrayOf(
+                "Limpar quadro de voo",
+                "Remover referência importada",
+                "Limpar tudo"
+            )
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "O que deseja limpar?"
+            )
+            .setItems(
+                options
+            ) {
+                    _,
+                    which ->
+
+                when (
+                    which
+                ) {
+
+                    0 -> {
+
+                        flightBoundary.clear()
+
+                        invalidatePlan()
+
+                        redrawBoundary(
+                            false
+                        )
+
+                        updateStatsAreaOnly()
+
+                        toast(
+                            "Quadro de voo limpo"
+                        )
+                    }
+
+                    1 -> {
+
+                        referenceBoundary.clear()
+
+                        redrawReference(
+                            false
+                        )
+
+                        toast(
+                            "Referência removida"
+                        )
+                    }
+
+                    2 -> {
+
+                        flightBoundary.clear()
+
+                        referenceBoundary.clear()
+
+                        invalidatePlan()
+
+                        redrawBoundary(
+                            false
+                        )
+
+                        redrawReference(
+                            false
+                        )
+
+                        updateStatsAreaOnly()
+
+                        toast(
+                            "Mapa limpo"
+                        )
+                    }
+                }
+            }
+            .setNegativeButton(
+                "Cancelar",
+                null
+            )
+            .show()
+    }
+
+    private fun toggleMapType() {
+
+        satelliteMode =
+            !satelliteMode
+
+        if (
+            satelliteMode
+        ) {
+
+            binding.map.setTileSource(
+                satelliteTileSource
+            )
+
+            binding.btnMapType.text =
+                "MAP"
+
+            toast(
+                "Imagem de satélite ativada"
+            )
+
+        } else {
+
+            binding.map.setTileSource(
+                TileSourceFactory.MAPNIK
+            )
+
+            binding.btnMapType.text =
+                "SAT"
+
+            toast(
+                "Mapa normal ativado"
+            )
+        }
+
+        binding.map.invalidate()
+    }
+
+    private fun showPreviewKmlMenu() {
+
+        val options =
+            arrayOf(
+                "Abrir em aplicativo",
+                "Compartilhar",
+                "Salvar no dispositivo"
+            )
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "Prévia KML"
+            )
+            .setItems(
+                options
+            ) {
+                    _,
+                    which ->
+
+                when (
+                    which
+                ) {
+
+                    0 ->
+                        openPreviewKml()
+
+                    1 ->
+                        sharePreviewKml()
+
+                    2 ->
+                        previewLauncher.launch(
+                            "NV_Mapping_preview.kml"
+                        )
+                }
+            }
+            .setNegativeButton(
+                "Cancelar",
+                null
+            )
+            .show()
+    }
+
+    private fun createPreviewKmlFile():
+        File {
+
+        val current =
+            plan
+                ?: error(
+                    "Gere o plano antes da prévia"
+                )
+
+        val dir =
+            File(
+                cacheDir,
+                "exports"
+            ).apply {
+
+                mkdirs()
+            }
+
+        val file =
+            File(
+                dir,
+                "NV_Mapping_preview.kml"
+            )
+
+        file.outputStream().use { out ->
+
+            writePreviewKml(
+                current,
+                out
+            )
+        }
+
+        return file
+    }
+
+    private fun openPreviewKml() {
+
+        runCatching {
+
+            val file =
+                createPreviewKmlFile()
+
+            val uri =
+                FileProvider.getUriForFile(
+                    this,
+                    "$packageName.fileprovider",
+                    file
+                )
+
+            val intent =
+                Intent(
+                    Intent.ACTION_VIEW
+                ).apply {
+
+                    setDataAndType(
+                        uri,
+                        "application/vnd.google-earth.kml+xml"
+                    )
+
+                    addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+
+            startActivity(
+                Intent.createChooser(
+                    intent,
+                    "Abrir prévia KML com"
+                )
+            )
+
+        }.onFailure {
+
+            toast(
+                "Não foi possível abrir a prévia: ${it.message}"
+            )
+        }
+    }
+
+    private fun sharePreviewKml() {
+
+        runCatching {
+
+            val file =
+                createPreviewKmlFile()
+
+            val uri =
+                FileProvider.getUriForFile(
+                    this,
+                    "$packageName.fileprovider",
+                    file
+                )
+
+            val intent =
+                Intent(
+                    Intent.ACTION_SEND
+                ).apply {
+
+                    type =
+                        "application/vnd.google-earth.kml+xml"
+
+                    putExtra(
+                        Intent.EXTRA_STREAM,
+                        uri
+                    )
+
+                    addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+
+            startActivity(
+                Intent.createChooser(
+                    intent,
+                    "Compartilhar prévia KML"
+                )
+            )
+
+        }.onFailure {
+
+            toast(
+                "Erro ao compartilhar prévia: ${it.message}"
+            )
+        }
+    }
+
+    private fun writePreviewKml(
+        current: MissionPlan,
+        out: OutputStream
+    ) {
+
+        OutputStreamWriter(
+            out,
+            Charsets.UTF_8
+        ).use { writer ->
+
+            fun coords(
+                points: List<LatLng>
+            ): String {
+
+                if (
+                    points.isEmpty()
+                ) {
+
+                    return ""
+                }
+
+                return points.joinToString(
+                    " "
+                ) {
+
+                    "${it.lon},${it.lat},0"
+                }
+            }
+
+            fun closedCoords(
+                points: List<LatLng>
+            ): String {
+
+                if (
+                    points.isEmpty()
+                ) {
+
+                    return ""
+                }
+
+                val closed =
+                    if (
+                        points.first() ==
+                        points.last()
+                    ) {
+
+                        points
+
+                    } else {
+
+                        points +
+                            points.first()
+                    }
+
+                return coords(
+                    closed
+                )
+            }
+
+            writer.appendLine(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            )
+
+            writer.appendLine(
+                "<kml xmlns=\"http://www.opengis.net/kml/2.2\">"
+            )
+
+            writer.appendLine(
+                "<Document>"
+            )
+
+            writer.appendLine(
+                "<name>NV Drone Mapping - Prévia</name>"
+            )
+
+            /*
+             * KML usa a ordem:
+             * AA BB GG RR
+             *
+             * A prévia usa apenas LineString.
+             * Não existe Polygon preenchido.
+             */
+
+            writer.appendLine(
+                "<Style id=\"ref\">" +
+                    "<LineStyle>" +
+                    "<color>ffff7a00</color>" +
+                    "<width>3</width>" +
+                    "</LineStyle>" +
+                    "</Style>"
+            )
+
+            writer.appendLine(
+                "<Style id=\"frame\">" +
+                    "<LineStyle>" +
+                    "<color>ff0080ff</color>" +
+                    "<width>4</width>" +
+                    "</LineStyle>" +
+                    "</Style>"
+            )
+
+            writer.appendLine(
+                "<Style id=\"route\">" +
+                    "<LineStyle>" +
+                    "<color>ff00ffff</color>" +
+                    "<width>4</width>" +
+                    "</LineStyle>" +
+                    "</Style>"
+            )
+
+            if (
+                referenceBoundary.size >= 2
+            ) {
+
+                writer.appendLine(
+                    "<Placemark>"
+                )
+
+                writer.appendLine(
+                    "<name>Referência</name>" +
+                        "<styleUrl>#ref</styleUrl>"
+                )
+
+                writer.appendLine(
+                    "<LineString>" +
+                        "<tessellate>1</tessellate>" +
+                        "<altitudeMode>clampToGround</altitudeMode>"
+                )
+
+                writer.appendLine(
+                    "<coordinates>" +
+                        closedCoords(
+                            referenceBoundary
+                        ) +
+                        "</coordinates>" +
+                        "</LineString>"
+                )
+
+                writer.appendLine(
+                    "</Placemark>"
+                )
+            }
+
+            if (
+                flightBoundary.size >= 2
+            ) {
+
+                writer.appendLine(
+                    "<Placemark>"
+                )
+
+                writer.appendLine(
+                    "<name>Quadro de voo</name>" +
+                        "<styleUrl>#frame</styleUrl>"
+                )
+
+                writer.appendLine(
+                    "<LineString>" +
+                        "<tessellate>1</tessellate>" +
+                        "<altitudeMode>clampToGround</altitudeMode>"
+                )
+
+                writer.appendLine(
+                    "<coordinates>" +
+                        closedCoords(
+                            flightBoundary
+                        ) +
+                        "</coordinates>" +
+                        "</LineString>"
+                )
+
+                writer.appendLine(
+                    "</Placemark>"
+                )
+            }
+
+            current.parts.forEachIndexed {
+                    index,
+                    part ->
+
+                if (
+                    part.size >= 2
+                ) {
+
+                    writer.appendLine(
+                        "<Placemark>"
+                    )
+
+                    writer.appendLine(
+                        "<name>Traçado ${index + 1}</name>" +
+                            "<styleUrl>#route</styleUrl>"
+                    )
+
+                    writer.appendLine(
+                        "<LineString>" +
+                            "<tessellate>1</tessellate>" +
+                            "<altitudeMode>clampToGround</altitudeMode>"
+                    )
+
+                    writer.appendLine(
+                        "<coordinates>" +
+                            coords(
+                                part
+                            ) +
+                            "</coordinates>" +
+                            "</LineString>"
+                    )
+
+                    writer.appendLine(
+                        "</Placemark>"
+                    )
+                }
+            }
+
+            writer.appendLine(
+                "</Document>"
+            )
+
+            writer.appendLine(
+                "</kml>"
+            )
+        }
     }
 
     private fun requestLocationAndLocate() {
 
-        val fineGranted =
-            ContextCompat
-                .checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) ==
-                PackageManager.PERMISSION_GRANTED
-
-        val coarseGranted =
-            ContextCompat
-                .checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) ==
-                PackageManager.PERMISSION_GRANTED
-
         if (
-            fineGranted ||
-            coarseGranted
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) ==
+            PackageManager.PERMISSION_GRANTED ||
+
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) ==
+            PackageManager.PERMISSION_GRANTED
         ) {
 
             locateUser()
@@ -2297,11 +2486,14 @@ class MainActivity : AppCompatActivity() {
                 LOCATION_SERVICE
             ) as LocationManager
 
-        val last =
+        val providers =
             listOf(
                 LocationManager.GPS_PROVIDER,
                 LocationManager.NETWORK_PROVIDER
             )
+
+        val last =
+            providers
                 .mapNotNull { provider ->
 
                     runCatching {
@@ -2313,96 +2505,82 @@ class MainActivity : AppCompatActivity() {
                     }.getOrNull()
                 }
                 .maxByOrNull {
+
                     it.time
                 }
 
         if (
-            last == null
+            last != null
         ) {
 
+            val point =
+                GeoPoint(
+                    last.latitude,
+                    last.longitude
+                )
+
+            userLocationMarker?.let {
+
+                binding.map.overlays.remove(
+                    it
+                )
+            }
+
+            userLocationMarker =
+                Marker(
+                    binding.map
+                ).apply {
+
+                    position =
+                        point
+
+                    title =
+                        "Minha localização aproximada"
+
+                    snippet =
+                        String.format(
+                            Locale.getDefault(),
+                            "Lat %.6f | Lon %.6f | precisão ~%.0f m",
+                            last.latitude,
+                            last.longitude,
+                            last.accuracy
+                        )
+
+                    icon =
+                        ContextCompat.getDrawable(
+                            this@MainActivity,
+                            R.drawable.ic_my_location
+                        )
+
+                    setAnchor(
+                        Marker.ANCHOR_CENTER,
+                        Marker.ANCHOR_CENTER
+                    )
+                }
+
+            binding.map.overlays.add(
+                userLocationMarker
+            )
+
+            binding.map.controller.animateTo(
+                point
+            )
+
+            binding.map.controller.setZoom(
+                16.5
+            )
+
+            binding.map.invalidate()
+
             toast(
-                "Ative a localização do celular e toque em ⌖ novamente"
+                "Localização aproximada marcada em azul"
             )
 
             return
         }
 
-        val point =
-            GeoPoint(
-                last.latitude,
-                last.longitude
-            )
-
-        userLocationMarker
-            ?.let {
-
-                binding.map
-                    .overlays
-                    .remove(
-                        it
-                    )
-            }
-
-        userLocationMarker =
-            Marker(
-                binding.map
-            ).apply {
-
-                position =
-                    point
-
-                title =
-                    "Minha localização aproximada"
-
-                snippet =
-                    String.format(
-                        Locale.getDefault(),
-                        "Lat %.6f | Lon %.6f | precisão ~%.0f m",
-                        last.latitude,
-                        last.longitude,
-                        last.accuracy
-                    )
-
-                icon =
-                    createCircleDrawable(
-                        Color.rgb(
-                            25,
-                            118,
-                            210
-                        ),
-                        Color.WHITE,
-                        18,
-                        2
-                    )
-
-                setAnchor(
-                    Marker.ANCHOR_CENTER,
-                    Marker.ANCHOR_CENTER
-                )
-            }
-
-        binding.map
-            .overlays
-            .add(
-                userLocationMarker
-            )
-
-        binding.map
-            .controller
-            .animateTo(
-                point
-            )
-
-        binding.map
-            .controller
-            .setZoom(
-                16.5
-            )
-
-        binding.map.invalidate()
-
         toast(
-            "Localização aproximada marcada em azul"
+            "Ative a localização do celular e toque em ⌖ novamente"
         )
     }
 
@@ -2411,167 +2589,24 @@ class MainActivity : AppCompatActivity() {
         total: Int
     ): String {
 
-        val base =
-            currentProjectName
-                ?.let(
-                    ::safeFileName
-                )
-                ?.takeIf {
-                    it.isNotBlank()
-                }
-                ?: "NV_Mapping_${
-                    SimpleDateFormat(
-                        "yyyyMMdd_HHmm",
-                        Locale.US
-                    )
-                        .format(
-                            Date()
-                        )
-                }"
+        val stamp =
+            SimpleDateFormat(
+                "yyyyMMdd_HHmm",
+                Locale.US
+            ).format(
+                Date()
+            )
 
         return if (
             total > 1
         ) {
 
-            "${base}_DJI_${index + 1}_de_${total}.kmz"
+            "NV_Mapping_${stamp}_${index + 1}_of_${total}.kmz"
 
         } else {
 
-            "${base}_DJI.kmz"
+            "NV_Mapping_${stamp}.kmz"
         }
-    }
-
-    private fun defaultPreviewName():
-        String {
-
-        val base =
-            currentProjectName
-                ?.let(
-                    ::safeFileName
-                )
-                ?.takeIf {
-                    it.isNotBlank()
-                }
-                ?: "NV_Mapping_${
-                    SimpleDateFormat(
-                        "yyyyMMdd_HHmm",
-                        Locale.US
-                    )
-                        .format(
-                            Date()
-                        )
-                }"
-
-        return "${base}_Previa.kml"
-    }
-
-    private fun safeFileName(
-        value: String
-    ): String {
-
-        return value
-            .trim()
-            .replace(
-                Regex(
-                    "[^A-Za-z0-9À-ÿ_-]+"
-                ),
-                "_"
-            )
-            .trim(
-                '_'
-            )
-    }
-
-    private fun boundaryPerimeterM():
-        Double {
-
-        if (
-            boundary.size < 2
-        ) {
-
-            return 0.0
-        }
-
-        return GeoMath.polylineDistanceM(
-            boundary +
-                boundary.first()
-        )
-    }
-
-    private fun formatDistance(
-        distanceM: Double
-    ): String {
-
-        return if (
-            distanceM >= 1000.0
-        ) {
-
-            String.format(
-                Locale.getDefault(),
-                "%.2f km",
-                distanceM /
-                    1000.0
-            )
-
-        } else {
-
-            String.format(
-                Locale.getDefault(),
-                "%.0f m",
-                distanceM
-            )
-        }
-    }
-
-    private fun createCircleDrawable(
-        fillColor: Int,
-        strokeColor: Int,
-        sizeDp: Int,
-        strokeDp: Int
-    ): GradientDrawable {
-
-        val density =
-            resources
-                .displayMetrics
-                .density
-
-        return GradientDrawable()
-            .apply {
-
-                shape =
-                    GradientDrawable.OVAL
-
-                setColor(
-                    fillColor
-                )
-
-                setStroke(
-                    (
-                        strokeDp *
-                            density
-                        )
-                        .toInt()
-                        .coerceAtLeast(
-                            1
-                        ),
-                    strokeColor
-                )
-
-                val px =
-                    (
-                        sizeDp *
-                            density
-                        )
-                        .toInt()
-                        .coerceAtLeast(
-                            1
-                        )
-
-                setSize(
-                    px,
-                    px
-                )
-            }
     }
 
     private fun formatArea(
@@ -2579,7 +2614,7 @@ class MainActivity : AppCompatActivity() {
     ): String {
 
         return if (
-            areaM2 >= 10_000.0
+            areaM2 >= 10_000
         ) {
 
             String.format(
@@ -2645,13 +2680,11 @@ class MainActivity : AppCompatActivity() {
         message: String
     ) {
 
-        Toast
-            .makeText(
-                this,
-                message,
-                Toast.LENGTH_LONG
-            )
-            .show()
+        Toast.makeText(
+            this,
+            message,
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     override fun onResume() {

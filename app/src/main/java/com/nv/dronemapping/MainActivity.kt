@@ -7,11 +7,17 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
 import android.location.LocationManager
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Bundle
+import android.view.View
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -22,6 +28,7 @@ import com.nv.dronemapping.databinding.ActivityMainBinding
 import com.nv.dronemapping.dji.KmzExporter
 import com.nv.dronemapping.geometry.GeoMath
 import com.nv.dronemapping.geometry.GridPlanner
+import com.nv.dronemapping.io.DxfImporter
 import com.nv.dronemapping.io.KmlImporter
 import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionPlan
@@ -30,14 +37,16 @@ import com.nv.dronemapping.model.SavedProject
 import com.nv.dronemapping.storage.ProjectStore
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.ScaleBarOverlay
 import java.io.File
 import java.io.OutputStream
 import java.io.OutputStreamWriter
@@ -56,6 +65,7 @@ class MainActivity : AppCompatActivity() {
 
     private val flightVertexMarkers = mutableListOf<Marker>()
     private val routeOverlays = mutableListOf<Polyline>()
+    private val routeArrowMarkers = mutableListOf<Marker>()
 
     private var referenceOverlay: Polygon? = null
     private var flightBoundaryOverlay: Polygon? = null
@@ -63,11 +73,18 @@ class MainActivity : AppCompatActivity() {
     private var plan: MissionPlan? = null
     private var pendingExportPart = 0
     private var userLocationMarker: Marker? = null
+    private var preferredStartMarker: Marker? = null
+    private var preferredStart: LatLng? = null
+    private var selectingStartPoint = false
 
     private var satelliteMode = false
+    private var showReferenceLayer = true
+    private var showFlightLayer = true
+    private var showRouteLayer = true
 
     private val satelliteTileSource by lazy {
-        XYTileSource(
+
+        object : OnlineTileSourceBase(
             "EsriWorldImagery",
             0,
             19,
@@ -76,7 +93,30 @@ class MainActivity : AppCompatActivity() {
             arrayOf(
                 "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"
             )
-        )
+        ) {
+
+            override fun getTileURLString(
+                pMapTileIndex: Long
+            ): String {
+
+                val z =
+                    MapTileIndex.getZoom(
+                        pMapTileIndex
+                    )
+
+                val x =
+                    MapTileIndex.getX(
+                        pMapTileIndex
+                    )
+
+                val y =
+                    MapTileIndex.getY(
+                        pMapTileIndex
+                    )
+
+                return "${getBaseUrl()}$z/$y/$x$mImageFilenameEnding"
+            }
+        }
     }
 
     private val importLauncher =
@@ -84,14 +124,44 @@ class MainActivity : AppCompatActivity() {
             ActivityResultContracts.OpenDocument()
         ) { uri ->
 
-            uri ?: return@registerForActivityResult
+            uri
+                ?: return@registerForActivityResult
 
             runCatching {
 
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                contentResolver
+                    .takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+            }
+
+            val displayName =
+                getDisplayName(
+                    uri
                 )
+
+            val mimeType =
+                contentResolver
+                    .getType(uri)
+                    .orEmpty()
+
+            if (
+                displayName.endsWith(
+                    ".dxf",
+                    ignoreCase = true
+                ) ||
+                mimeType.contains(
+                    "dxf",
+                    ignoreCase = true
+                )
+            ) {
+
+                importDxfReference(
+                    uri
+                )
+
+                return@registerForActivityResult
             }
 
             runCatching {
@@ -104,7 +174,9 @@ class MainActivity : AppCompatActivity() {
             }.onSuccess { points ->
 
                 referenceBoundary.clear()
-                referenceBoundary.addAll(points)
+                referenceBoundary.addAll(
+                    points
+                )
 
                 redrawReference(
                     fit = true
@@ -130,14 +202,18 @@ class MainActivity : AppCompatActivity() {
         ) { uri ->
 
             val current =
-                plan ?: return@registerForActivityResult
+                plan
+                    ?: return@registerForActivityResult
 
-            uri ?: return@registerForActivityResult
+            uri
+                ?: return@registerForActivityResult
 
             runCatching {
 
                 contentResolver
-                    .openOutputStream(uri)
+                    .openOutputStream(
+                        uri
+                    )
                     ?.use { out ->
 
                         KmzExporter.writeKmz(
@@ -173,14 +249,18 @@ class MainActivity : AppCompatActivity() {
         ) { uri ->
 
             val current =
-                plan ?: return@registerForActivityResult
+                plan
+                    ?: return@registerForActivityResult
 
-            uri ?: return@registerForActivityResult
+            uri
+                ?: return@registerForActivityResult
 
             runCatching {
 
                 contentResolver
-                    .openOutputStream(uri)
+                    .openOutputStream(
+                        uri
+                    )
                     ?.use { out ->
 
                         writePreviewKml(
@@ -212,7 +292,9 @@ class MainActivity : AppCompatActivity() {
         ) { grants ->
 
             if (
-                grants.values.any { it }
+                grants.values.any {
+                    it
+                }
             ) {
 
                 locateUser()
@@ -268,6 +350,8 @@ class MainActivity : AppCompatActivity() {
 
         updateBearingStatus()
         updateStatsAreaOnly()
+
+        ensureConsentAndTutorial()
     }
 
     private fun setupMap() {
@@ -291,6 +375,39 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
+        val scaleBar =
+            ScaleBarOverlay(
+                binding.map
+            ).apply {
+
+                setAlignBottom(
+                    true
+                )
+
+                setAlignRight(
+                    false
+                )
+
+                setScaleBarOffset(
+                    10,
+                    10
+                )
+
+                setEnableAdjustLength(
+                    true
+                )
+
+                setUnitsOfMeasure(
+                    ScaleBarOverlay
+                        .UnitsOfMeasure
+                        .metric
+                )
+            }
+
+        binding.map.overlays.add(
+            scaleBar
+        )
+
         val events =
             MapEventsOverlay(
 
@@ -300,6 +417,33 @@ class MainActivity : AppCompatActivity() {
                     override fun singleTapConfirmedHelper(
                         p: GeoPoint
                     ): Boolean {
+
+                        if (selectingStartPoint) {
+
+                            selectingStartPoint =
+                                false
+
+                            preferredStart =
+                                LatLng(
+                                    p.latitude,
+                                    p.longitude
+                                )
+
+                            redrawPreferredStartMarker()
+
+                            if (plan != null) {
+
+                                generateMission(
+                                    showToast = false
+                                )
+                            }
+
+                            toast(
+                                "Ponto inicial preferido definido"
+                            )
+
+                            return true
+                        }
 
                         flightBoundary +=
                             LatLng(
@@ -366,6 +510,8 @@ class MainActivity : AppCompatActivity() {
                     "application/vnd.google-earth.kmz",
                     "application/zip",
                     "application/octet-stream",
+                    "application/dxf",
+                    "image/vnd.dxf",
                     "text/xml",
                     "text/plain"
                 )
@@ -399,6 +545,47 @@ class MainActivity : AppCompatActivity() {
         binding.btnInvert.setOnClickListener {
 
             invertFlightDirection()
+        }
+
+        binding.btnAdvanced.setOnClickListener {
+
+            toggleAdvancedPanel()
+        }
+
+        binding.btnStartPoint.setOnClickListener {
+
+            if (
+                flightBoundary.size < 3
+            ) {
+
+                toast(
+                    "Desenhe o quadro de voo antes de definir o início"
+                )
+
+            } else {
+
+                selectingStartPoint =
+                    true
+
+                binding.txtHint.text =
+                    "Toque no mapa próximo de onde deseja iniciar o voo"
+
+                toast(
+                    "Toque no mapa para definir o início preferido"
+                )
+            }
+        }
+
+        binding.btnLayers.setOnClickListener {
+
+            showLayersDialog()
+        }
+
+        binding.btnTutorial.setOnClickListener {
+
+            showTutorial(
+                0
+            )
         }
 
         binding.btnExport.setOnClickListener {
@@ -494,6 +681,12 @@ class MainActivity : AppCompatActivity() {
 
         binding.inBearing.isEnabled =
             !binding.checkAutoBearing.isChecked
+
+        binding.advancedContainer.visibility =
+            View.GONE
+
+        binding.btnAdvanced.text =
+            "AVANÇADO ▼"
     }
 
     private fun rotateFlightLines(
@@ -619,8 +812,14 @@ class MainActivity : AppCompatActivity() {
 
         }.onSuccess { generated ->
 
+            val oriented =
+                GridPlanner.orientTowardStart(
+                    generated,
+                    preferredStart
+                )
+
             plan =
-                generated
+                oriented
 
             binding.btnExport.isEnabled =
                 true
@@ -632,35 +831,37 @@ class MainActivity : AppCompatActivity() {
                 true
 
             drawRoute(
-                generated
+                oriented
             )
 
             updateStats(
-                generated
+                oriented
             )
 
             updateBearingStatus(
-                generated.stats.effectiveBearingDeg
+                oriented.stats.effectiveBearingDeg
             )
 
             binding.txtHint.text =
                 if (
-                    generated.parts.size > 1
+                    oriented.parts.size > 1
                 ) {
 
-                    "Plano aplicado: ${generated.parts.size} partes. Revise as linhas."
+                    "Plano aplicado: ${oriented.parts.size} partes. Revise as linhas."
 
                 } else {
 
                     "Plano aplicado. Use -15° / +15° para rotacionar as linhas."
                 }
 
-            if (
-                showToast
-            ) {
+            if (showToast) {
 
                 toast(
                     "Plano de voo aplicado dentro do quadro manual"
+                )
+
+                showLongRouteWarningIfNeeded(
+                    oriented
                 )
             }
 
@@ -690,9 +891,7 @@ class MainActivity : AppCompatActivity() {
                     )
                     ?.toDoubleOrNull()
 
-            if (
-                v == null
-            ) {
+            if (v == null) {
 
                 toast(
                     "Informe $label corretamente"
@@ -790,40 +989,28 @@ class MainActivity : AppCompatActivity() {
         }
 
         return MissionSettings(
-
             altitudeM =
                 altitude,
-
             speedMs =
                 speed,
-
             frontOverlapPct =
                 front,
-
             sideOverlapPct =
                 side,
-
             bearingDeg =
                 bearing,
-
             autoBearing =
                 binding.checkAutoBearing.isChecked,
-
             crossHatch =
                 binding.checkCrossHatch.isChecked,
-
             gimbalPitchDeg =
                 gimbal,
-
             maxWaypointsPerMission =
                 maxWaypoints,
-
             droneEnumValue =
                 droneEnum,
-
             finishAction =
                 "goHome",
-
             rcLostAction =
                 "goBack"
         )
@@ -867,7 +1054,6 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
 
-                    // QUADRO DE VOO = LARANJA
                     outlinePaint.color =
                         Color.rgb(
                             255,
@@ -907,6 +1093,22 @@ class MainActivity : AppCompatActivity() {
 
                     title =
                         "Quadro ${index + 1}"
+
+                    snippet =
+                        String.format(
+                            Locale.getDefault(),
+                            "Lat %.7f | Lon %.7f",
+                            p.lat,
+                            p.lon
+                        )
+
+                    setOnMarkerClickListener {
+                            clicked,
+                            _ ->
+
+                        clicked.showInfoWindow()
+                        true
+                    }
 
                     smallVertexIcon?.let {
 
@@ -983,6 +1185,10 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+        redrawPreferredStartMarker()
+
+        applyLayerVisibility()
+
         binding.map.invalidate()
 
         if (
@@ -1007,12 +1213,16 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        routeOverlays.clear()
+        routeArrowMarkers.forEach {
 
-        /*
-         * PLANO DE VOO começa em CIANO.
-         * Fica claramente diferente do quadro laranja.
-         */
+            binding.map.overlays.remove(
+                it
+            )
+        }
+
+        routeOverlays.clear()
+        routeArrowMarkers.clear()
+
         val colors =
             intArrayOf(
 
@@ -1046,6 +1256,21 @@ class MainActivity : AppCompatActivity() {
                     191
                 )
             )
+
+        val arrowStride =
+            if (
+                plan.parts.size <= 4
+            ) {
+
+                1
+
+            } else {
+
+                kotlin.math.ceil(
+                    plan.parts.size /
+                        8.0
+                ).toInt()
+            }
 
         plan.parts.forEachIndexed {
                 idx,
@@ -1086,7 +1311,31 @@ class MainActivity : AppCompatActivity() {
             binding.map.overlays.add(
                 line
             )
+
+            if (
+                plan.parts.size <= 4 ||
+                idx % arrowStride == 0 ||
+                idx == plan.parts.lastIndex
+            ) {
+
+                addDirectionArrows(
+                    part,
+                    colors[
+                        idx %
+                            colors.size
+                    ],
+                    if (
+                        plan.parts.size <= 4
+                    ) {
+                        3
+                    } else {
+                        1
+                    }
+                )
+            }
         }
+
+        redrawPreferredStartMarker()
 
         userLocationMarker?.let {
 
@@ -1099,6 +1348,8 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+        applyLayerVisibility()
+
         binding.map.invalidate()
 
         fitToPoints(
@@ -1110,10 +1361,7 @@ class MainActivity : AppCompatActivity() {
         points: List<LatLng>
     ) {
 
-        if (
-            points.isEmpty()
-        ) {
-
+        if (points.isEmpty()) {
             return
         }
 
@@ -1172,9 +1420,7 @@ class MainActivity : AppCompatActivity() {
             }
 
         binding.txtStats.text =
-            if (
-                area > 0
-            ) {
+            if (area > 0) {
 
                 "Quadro: ${formatArea(area)} | Toque em APLICAR PLANO"
 
@@ -1313,6 +1559,101 @@ class MainActivity : AppCompatActivity() {
             plan
                 ?: return
 
+        val minutes =
+            ceil(
+                current.stats
+                    .estimatedFlightSeconds /
+                    60.0
+            ).toInt()
+
+        val route =
+            if (
+                current.stats.routeDistanceM >=
+                1000.0
+            ) {
+
+                String.format(
+                    Locale.getDefault(),
+                    "%.2f km",
+                    current.stats.routeDistanceM /
+                        1000.0
+                )
+
+            } else {
+
+                String.format(
+                    Locale.getDefault(),
+                    "%.0f m",
+                    current.stats.routeDistanceM
+                )
+            }
+
+        val summary =
+            buildString {
+
+                append(
+                    "Altura: ${trimNumber(current.settings.altitudeM)} m\n"
+                )
+
+                append(
+                    "Velocidade: ${trimNumber(current.settings.speedMs)} m/s\n"
+                )
+
+                append(
+                    "Sobreposição: ${trimNumber(current.settings.frontOverlapPct)}% frontal / ${trimNumber(current.settings.sideOverlapPct)}% lateral\n"
+                )
+
+                append(
+                    "Direção: ${trimNumber(current.stats.effectiveBearingDeg)}°\n"
+                )
+
+                append(
+                    "Fotos: ${current.stats.photoCount}\n"
+                )
+
+                append(
+                    "Rota: $route\n"
+                )
+
+                append(
+                    "Tempo estimado: ~${minutes} min\n"
+                )
+
+                append(
+                    "Partes DJI: ${current.parts.size}"
+                )
+            }
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "Resumo antes de exportar"
+            )
+            .setMessage(
+                summary
+            )
+            .setPositiveButton(
+                "CONTINUAR"
+            ) {
+                    _,
+                    _ ->
+
+                choosePartAndExportInternal(
+                    current
+                )
+            }
+            .setNegativeButton(
+                "Cancelar",
+                null
+            )
+            .show()
+    }
+
+    private fun choosePartAndExportInternal(
+        current: MissionPlan
+    ) {
+
         if (
             current.parts.size == 1
         ) {
@@ -1335,7 +1676,6 @@ class MainActivity : AppCompatActivity() {
                 .map { i ->
 
                     "Parte ${i + 1}/${current.parts.size} — ${current.parts[i].size} waypoints"
-
                 }
                 .toTypedArray()
 
@@ -1355,7 +1695,6 @@ class MainActivity : AppCompatActivity() {
                     which
 
                 exportLauncher.launch(
-
                     defaultKmzName(
                         which,
                         current.parts.size
@@ -1400,15 +1739,16 @@ class MainActivity : AppCompatActivity() {
                             )
                         )
 
-                    file.outputStream().use {
+                    file.outputStream()
+                        .use {
 
-                        KmzExporter.writeKmz(
-                            current,
-                            index,
-                            "NV_Mapping",
-                            it
-                        )
-                    }
+                            KmzExporter.writeKmz(
+                                current,
+                                index,
+                                "NV_Mapping",
+                                it
+                            )
+                        }
 
                     FileProvider.getUriForFile(
                         this,
@@ -1546,10 +1886,20 @@ class MainActivity : AppCompatActivity() {
                 store.save(
 
                     SavedProject(
-                        name,
-                        flightBoundary.toList(),
-                        settings,
-                        System.currentTimeMillis()
+                        name =
+                            name,
+                        boundary =
+                            flightBoundary.toList(),
+                        settings =
+                            settings,
+                        savedAtMs =
+                            System.currentTimeMillis(),
+                        referenceBoundary =
+                            referenceBoundary.toList(),
+                        preferredStart =
+                            preferredStart,
+                        plan =
+                            plan
                     )
                 )
 
@@ -1686,6 +2036,8 @@ class MainActivity : AppCompatActivity() {
         project: SavedProject
     ) {
 
+        invalidatePlan()
+
         flightBoundary.clear()
 
         flightBoundary.addAll(
@@ -1694,23 +2046,67 @@ class MainActivity : AppCompatActivity() {
 
         referenceBoundary.clear()
 
-        redrawReference(
-            false
+        referenceBoundary.addAll(
+            project.referenceBoundary
         )
+
+        preferredStart =
+            project.preferredStart
 
         applySettings(
             project.settings
         )
 
-        invalidatePlan()
+        redrawReference(
+            false
+        )
 
         redrawBoundary(
             true
         )
 
-        updateBearingStatus()
+        redrawPreferredStartMarker()
 
-        updateStatsAreaOnly()
+        val savedPlan =
+            project.plan
+
+        if (
+            savedPlan != null
+        ) {
+
+            plan =
+                savedPlan
+
+            binding.btnExport.isEnabled =
+                true
+
+            binding.btnShare.isEnabled =
+                true
+
+            binding.btnPreviewKml.isEnabled =
+                true
+
+            drawRoute(
+                savedPlan
+            )
+
+            updateStats(
+                savedPlan
+            )
+
+            updateBearingStatus(
+                savedPlan.stats
+                    .effectiveBearingDeg
+            )
+
+            binding.txtHint.text =
+                "Projeto e plano carregados"
+
+        } else {
+
+            updateBearingStatus()
+            updateStatsAreaOnly()
+        }
 
         toast(
             "Projeto carregado"
@@ -1805,9 +2201,7 @@ class MainActivity : AppCompatActivity() {
             false
 
         invalidatePlan()
-
         updateBearingStatus()
-
         updateStatsAreaOnly()
 
         toast(
@@ -1844,9 +2238,7 @@ class MainActivity : AppCompatActivity() {
             true
 
         invalidatePlan()
-
         updateBearingStatus()
-
         updateStatsAreaOnly()
 
         toast(
@@ -1864,7 +2256,7 @@ class MainActivity : AppCompatActivity() {
             )
             .setMessage(
 
-                "1. Importe KML/KMZ apenas como referência visual, se quiser.\n\n" +
+                "1. Importe KML/KMZ/DXF apenas como referência visual, se quiser.\n\n" +
 
                     "2. Desenhe manualmente o QUADRO DE VOO sobre o mapa.\n\n" +
 
@@ -1910,7 +2302,15 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+        routeArrowMarkers.forEach {
+
+            binding.map.overlays.remove(
+                it
+            )
+        }
+
         routeOverlays.clear()
+        routeArrowMarkers.clear()
 
         binding.map.invalidate()
 
@@ -1973,6 +2373,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        applyLayerVisibility()
+
         binding.map.invalidate()
 
         if (
@@ -1989,11 +2391,6 @@ class MainActivity : AppCompatActivity() {
     private fun createSmallVertexIcon():
         BitmapDrawable? {
 
-        /*
-         * Usa o mesmo PIN padrão que já existia.
-         * Apenas reduz para 78% do tamanho original.
-         */
-
         val original =
             Marker(
                 binding.map
@@ -2001,7 +2398,9 @@ class MainActivity : AppCompatActivity() {
                 ?: return null
 
         val density =
-            resources.displayMetrics.density
+            resources
+                .displayMetrics
+                .density
 
         val baseWidth =
             if (
@@ -2088,14 +2487,10 @@ class MainActivity : AppCompatActivity() {
     private fun createUserLocationDotIcon():
         BitmapDrawable {
 
-        /*
-         * LOCALIZAÇÃO ATUAL:
-         * pequeno ponto azul.
-         * Sem alvo.
-         */
-
         val density =
-            resources.displayMetrics.density
+            resources
+                .displayMetrics
+                .density
 
         val iconSize =
             (
@@ -2200,13 +2595,16 @@ class MainActivity : AppCompatActivity() {
                     _,
                     which ->
 
-                when (
-                    which
-                ) {
+                when (which) {
 
                     0 -> {
 
                         flightBoundary.clear()
+
+                        preferredStart =
+                            null
+
+                        removePreferredStartMarker()
 
                         invalidatePlan()
 
@@ -2237,8 +2635,12 @@ class MainActivity : AppCompatActivity() {
                     2 -> {
 
                         flightBoundary.clear()
-
                         referenceBoundary.clear()
+
+                        preferredStart =
+                            null
+
+                        removePreferredStartMarker()
 
                         invalidatePlan()
 
@@ -2267,12 +2669,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleMapType() {
 
+        val centerBefore =
+            GeoPoint(
+                binding.map
+                    .mapCenter
+                    .latitude,
+                binding.map
+                    .mapCenter
+                    .longitude
+            )
+
+        val zoomBefore =
+            binding.map
+                .zoomLevelDouble
+
         satelliteMode =
             !satelliteMode
 
-        if (
-            satelliteMode
-        ) {
+        if (satelliteMode) {
 
             binding.map.setTileSource(
                 satelliteTileSource
@@ -2299,7 +2713,996 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        binding.map.invalidate()
+        binding.map.controller.setCenter(
+            centerBefore
+        )
+
+        binding.map.controller.setZoom(
+            zoomBefore
+        )
+
+        binding.map.post {
+
+            binding.map.controller.setCenter(
+                centerBefore
+            )
+
+            binding.map.controller.setZoom(
+                zoomBefore
+            )
+
+            binding.map.invalidate()
+        }
+    }
+
+    private fun toggleAdvancedPanel() {
+
+        val opening =
+            binding.advancedContainer.visibility !=
+                View.VISIBLE
+
+        binding.advancedContainer.visibility =
+            if (opening) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+
+        binding.btnAdvanced.text =
+            if (opening) {
+                "AVANÇADO ▲"
+            } else {
+                "AVANÇADO ▼"
+            }
+    }
+
+    private fun showLayersDialog() {
+
+        val labels =
+            arrayOf(
+                "Referência importada",
+                "Quadro de voo",
+                "Plano / rota"
+            )
+
+        val checked =
+            booleanArrayOf(
+                showReferenceLayer,
+                showFlightLayer,
+                showRouteLayer
+            )
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "Camadas visíveis"
+            )
+            .setMultiChoiceItems(
+                labels,
+                checked
+            ) {
+                    _,
+                    which,
+                    isChecked ->
+
+                when (which) {
+
+                    0 ->
+                        showReferenceLayer =
+                            isChecked
+
+                    1 ->
+                        showFlightLayer =
+                            isChecked
+
+                    2 ->
+                        showRouteLayer =
+                            isChecked
+                }
+
+                applyLayerVisibility()
+
+                binding.map.invalidate()
+            }
+            .setPositiveButton(
+                "FECHAR",
+                null
+            )
+            .show()
+    }
+
+    private fun applyLayerVisibility() {
+
+        referenceOverlay?.isEnabled =
+            showReferenceLayer
+
+        flightBoundaryOverlay?.isEnabled =
+            showFlightLayer
+
+        flightVertexMarkers.forEach {
+
+            it.isEnabled =
+                showFlightLayer
+        }
+
+        routeOverlays.forEach {
+
+            it.isEnabled =
+                showRouteLayer
+        }
+
+        routeArrowMarkers.forEach {
+
+            it.isEnabled =
+                showRouteLayer
+        }
+
+        preferredStartMarker?.isEnabled =
+            showRouteLayer
+    }
+
+    private fun redrawPreferredStartMarker() {
+
+        removePreferredStartMarker()
+
+        val start =
+            preferredStart
+                ?: return
+
+        preferredStartMarker =
+            Marker(
+                binding.map
+            ).apply {
+
+                position =
+                    GeoPoint(
+                        start.lat,
+                        start.lon
+                    )
+
+                title =
+                    "Início preferido do voo"
+
+                snippet =
+                    String.format(
+                        Locale.getDefault(),
+                        "Lat %.7f | Lon %.7f",
+                        start.lat,
+                        start.lon
+                    )
+
+                setAnchor(
+                    Marker.ANCHOR_CENTER,
+                    Marker.ANCHOR_BOTTOM
+                )
+
+                isDraggable =
+                    false
+
+                setOnMarkerClickListener {
+                        marker,
+                        _ ->
+
+                    marker.showInfoWindow()
+
+                    true
+                }
+            }
+
+        preferredStartMarker?.let {
+
+            binding.map.overlays.add(
+                it
+            )
+        }
+
+        applyLayerVisibility()
+    }
+
+    private fun removePreferredStartMarker() {
+
+        preferredStartMarker?.let {
+
+            binding.map.overlays.remove(
+                it
+            )
+        }
+
+        preferredStartMarker =
+            null
+    }
+
+    private fun addDirectionArrows(
+        part: List<LatLng>,
+        color: Int,
+        maxArrows: Int
+    ) {
+
+        if (
+            part.size < 2
+        ) {
+            return
+        }
+
+        val indexes =
+            listOf(
+                part.size / 4,
+                part.size / 2,
+                part.size * 3 / 4
+            )
+                .distinct()
+                .filter {
+                    it in 1 until part.size
+                }
+                .take(
+                    maxArrows.coerceAtLeast(
+                        1
+                    )
+                )
+
+        indexes.forEach { index ->
+
+            val from =
+                part[index - 1]
+
+            val to =
+                part[index]
+
+            val bearing =
+                bearingBetween(
+                    from,
+                    to
+                )
+
+            val marker =
+                Marker(
+                    binding.map
+                ).apply {
+
+                    position =
+                        GeoPoint(
+                            to.lat,
+                            to.lon
+                        )
+
+                    icon =
+                        createDirectionArrowIcon(
+                            bearing,
+                            color
+                        )
+
+                    setAnchor(
+                        Marker.ANCHOR_CENTER,
+                        Marker.ANCHOR_CENTER
+                    )
+
+                    setOnMarkerClickListener {
+                            _,
+                            _ ->
+
+                        true
+                    }
+                }
+
+            routeArrowMarkers +=
+                marker
+
+            binding.map.overlays.add(
+                marker
+            )
+        }
+    }
+
+    private fun createDirectionArrowIcon(
+        bearingDeg: Double,
+        color: Int
+    ): BitmapDrawable {
+
+        val density =
+            resources
+                .displayMetrics
+                .density
+
+        val size =
+            (
+                24f *
+                    density
+                )
+                .toInt()
+                .coerceAtLeast(
+                    24
+                )
+
+        val bitmap =
+            Bitmap.createBitmap(
+                size,
+                size,
+                Bitmap.Config.ARGB_8888
+            )
+
+        val canvas =
+            Canvas(
+                bitmap
+            )
+
+        val paint =
+            Paint(
+                Paint.ANTI_ALIAS_FLAG
+            ).apply {
+
+                this.color =
+                    color
+
+                style =
+                    Paint.Style.FILL
+            }
+
+        canvas.rotate(
+            bearingDeg.toFloat(),
+            size / 2f,
+            size / 2f
+        )
+
+        val path =
+            Path().apply {
+
+                moveTo(
+                    size / 2f,
+                    size * 0.12f
+                )
+
+                lineTo(
+                    size * 0.82f,
+                    size * 0.82f
+                )
+
+                lineTo(
+                    size / 2f,
+                    size * 0.67f
+                )
+
+                lineTo(
+                    size * 0.18f,
+                    size * 0.82f
+                )
+
+                close()
+            }
+
+        canvas.drawPath(
+            path,
+            paint
+        )
+
+        return BitmapDrawable(
+            resources,
+            bitmap
+        )
+    }
+
+    private fun bearingBetween(
+        from: LatLng,
+        to: LatLng
+    ): Double {
+
+        val lat1 =
+            Math.toRadians(
+                from.lat
+            )
+
+        val lat2 =
+            Math.toRadians(
+                to.lat
+            )
+
+        val dLon =
+            Math.toRadians(
+                to.lon -
+                    from.lon
+            )
+
+        val y =
+            kotlin.math.sin(
+                dLon
+            ) *
+                kotlin.math.cos(
+                    lat2
+                )
+
+        val x =
+            kotlin.math.cos(
+                lat1
+            ) *
+                kotlin.math.sin(
+                    lat2
+                ) -
+                kotlin.math.sin(
+                    lat1
+                ) *
+                kotlin.math.cos(
+                    lat2
+                ) *
+                kotlin.math.cos(
+                    dLon
+                )
+
+        val bearing =
+            Math.toDegrees(
+                kotlin.math.atan2(
+                    y,
+                    x
+                )
+            )
+
+        return (
+            bearing +
+                360.0
+            ) %
+            360.0
+    }
+
+    private fun showLongRouteWarningIfNeeded(
+        current: MissionPlan
+    ) {
+
+        val minutes =
+            ceil(
+                current.stats
+                    .estimatedFlightSeconds /
+                    60.0
+            ).toInt()
+
+        if (
+            minutes <= 20 &&
+            current.stats.routeDistanceM <=
+            5_000.0
+        ) {
+
+            return
+        }
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "Atenção ao plano de voo"
+            )
+            .setMessage(
+
+                "A rota estimada ficou com aproximadamente $minutes min e " +
+
+                    String.format(
+                        Locale.getDefault(),
+                        "%.2f km.",
+                        current.stats.routeDistanceM /
+                            1000.0
+                    ) +
+
+                    "\n\nRevise autonomia, condições de voo e a necessidade de dividir a missão antes de decolar."
+            )
+            .setPositiveButton(
+                "ENTENDI",
+                null
+            )
+            .show()
+    }
+
+    private fun getDisplayName(
+        uri: Uri
+    ): String {
+
+        var name =
+            uri.lastPathSegment
+                .orEmpty()
+
+        contentResolver.query(
+            uri,
+            arrayOf(
+                OpenableColumns.DISPLAY_NAME
+            ),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+
+            val index =
+                cursor.getColumnIndex(
+                    OpenableColumns.DISPLAY_NAME
+                )
+
+            if (
+                index >= 0 &&
+                cursor.moveToFirst()
+            ) {
+
+                name =
+                    cursor.getString(
+                        index
+                    ).orEmpty()
+            }
+        }
+
+        return name
+    }
+
+    private fun importDxfReference(
+        uri: Uri
+    ) {
+
+        runCatching {
+
+            contentResolver
+                .openInputStream(
+                    uri
+                )
+                ?.use {
+
+                    DxfImporter.readPolylines(
+                        it
+                    )
+                }
+                ?: error(
+                    "Não foi possível abrir o DXF"
+                )
+
+        }.onSuccess { polylines ->
+
+            if (
+                polylines.isEmpty()
+            ) {
+
+                toast(
+                    "Nenhuma POLYLINE/LWPOLYLINE encontrada no DXF"
+                )
+
+                return@onSuccess
+            }
+
+            chooseDxfPolyline(
+                polylines
+            )
+
+        }.onFailure {
+
+            toast(
+                "Falha ao importar DXF: ${it.message}"
+            )
+        }
+    }
+
+    private fun chooseDxfPolyline(
+        polylines:
+            List<DxfImporter.DxfPolyline>
+    ) {
+
+        if (
+            polylines.size == 1
+        ) {
+
+            chooseDxfCrs(
+                polylines.first()
+            )
+
+            return
+        }
+
+        val labels =
+            polylines.map { polyline ->
+
+                val state =
+                    if (
+                        polyline.closed
+                    ) {
+                        "fechada"
+                    } else {
+                        "aberta"
+                    }
+
+                "${polyline.name} | layer ${polyline.layer} | ${polyline.points.size} vértices | $state"
+
+            }.toTypedArray()
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "Escolha a polilinha do DXF"
+            )
+            .setItems(
+                labels
+            ) {
+                    _,
+                    which ->
+
+                chooseDxfCrs(
+                    polylines[
+                        which
+                    ]
+                )
+            }
+            .setNegativeButton(
+                "Cancelar",
+                null
+            )
+            .show()
+    }
+
+    private fun chooseDxfCrs(
+        polyline:
+            DxfImporter.DxfPolyline
+    ) {
+
+        val options =
+            DxfImporter.Crs.values()
+
+        val labels =
+            options.map {
+                it.label
+            }.toTypedArray()
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                "Sistema de coordenadas do DXF"
+            )
+            .setItems(
+                labels
+            ) {
+                    _,
+                    which ->
+
+                runCatching {
+
+                    DxfImporter.toLatLng(
+                        polyline,
+                        options[
+                            which
+                        ]
+                    )
+
+                }.onSuccess { points ->
+
+                    referenceBoundary.clear()
+
+                    referenceBoundary.addAll(
+                        points
+                    )
+
+                    redrawReference(
+                        fit = true
+                    )
+
+                    toast(
+                        "DXF importado como referência: ${points.size} vértices"
+                    )
+
+                }.onFailure {
+
+                    toast(
+                        "Falha ao converter DXF: ${it.message}"
+                    )
+                }
+            }
+            .setNegativeButton(
+                "Cancelar",
+                null
+            )
+            .show()
+    }
+
+    private fun ensureConsentAndTutorial() {
+
+        val prefs =
+            getSharedPreferences(
+                "nv_drone_consent",
+                MODE_PRIVATE
+            )
+
+        if (
+            !prefs.getBoolean(
+                "accepted",
+                false
+            ) ||
+            prefs.getString(
+                "termsVersion",
+                null
+            ) != "1"
+        ) {
+
+            showConsentDialog()
+
+            return
+        }
+
+        if (
+            !prefs.getBoolean(
+                "tutorialShown",
+                false
+            )
+        ) {
+
+            showTutorial(
+                0
+            )
+        }
+    }
+
+    private fun showConsentDialog() {
+
+        val padding =
+            (
+                18f *
+                    resources
+                        .displayMetrics
+                        .density
+                ).toInt()
+
+        val container =
+            LinearLayout(
+                this
+            ).apply {
+
+                orientation =
+                    LinearLayout.VERTICAL
+
+                setPadding(
+                    padding,
+                    padding / 2,
+                    padding,
+                    0
+                )
+            }
+
+        val text =
+            TextView(
+                this
+            ).apply {
+
+                this.text =
+
+                    "O NV Drone Mapping é uma ferramenta de planejamento de voo. " +
+
+                        "Antes de qualquer operação, confira no aplicativo DJI a rota, altura, " +
+
+                        "Home/RTH, obstáculos, autonomia, condições locais e regras aplicáveis.\n\n" +
+
+                        "A importação de arquivos e os cálculos devem ser conferidos pelo usuário antes do voo. " +
+
+                        "O aceite abaixo será registrado somente neste aparelho com data/hora, " +
+
+                        "versão destes termos e versão do aplicativo."
+
+                textSize =
+                    14f
+            }
+
+        val check =
+            CheckBox(
+                this
+            ).apply {
+
+                text =
+                    "Li e aceito"
+            }
+
+        container.addView(
+            text
+        )
+
+        container.addView(
+            check
+        )
+
+        val dialog =
+            AlertDialog.Builder(
+                this
+            )
+                .setTitle(
+                    "Termos de uso"
+                )
+                .setView(
+                    container
+                )
+                .setPositiveButton(
+                    "LI E ACEITO",
+                    null
+                )
+                .setNegativeButton(
+                    "SAIR"
+                ) {
+                        _,
+                        _ ->
+
+                    finishAffinity()
+                }
+                .setCancelable(
+                    false
+                )
+                .create()
+
+        dialog.setOnShowListener {
+
+            val positive =
+                dialog.getButton(
+                    AlertDialog.BUTTON_POSITIVE
+                )
+
+            positive.isEnabled =
+                false
+
+            check.setOnCheckedChangeListener {
+                    _,
+                    checked ->
+
+                positive.isEnabled =
+                    checked
+            }
+
+            positive.setOnClickListener {
+
+                if (
+                    !check.isChecked
+                ) {
+                    return@setOnClickListener
+                }
+
+                getSharedPreferences(
+                    "nv_drone_consent",
+                    MODE_PRIVATE
+                )
+                    .edit()
+                    .putBoolean(
+                        "accepted",
+                        true
+                    )
+                    .putLong(
+                        "acceptedAtMs",
+                        System.currentTimeMillis()
+                    )
+                    .putString(
+                        "termsVersion",
+                        "1"
+                    )
+                    .putString(
+                        "appVersion",
+                        currentAppVersion()
+                    )
+                    .apply()
+
+                dialog.dismiss()
+
+                showTutorial(
+                    0
+                )
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun currentAppVersion():
+        String {
+
+        return runCatching {
+
+            packageManager
+                .getPackageInfo(
+                    packageName,
+                    0
+                )
+                .versionName
+                ?: "1.0.0"
+
+        }.getOrDefault(
+            "1.0.0"
+        )
+    }
+
+    private fun showTutorial(
+        step: Int
+    ) {
+
+        val steps =
+            listOf(
+
+                "1/8 — Referência" to
+                    "Use IMPORTAR REF para abrir KML, KMZ ou DXF. O arquivo importado é somente referência visual e não vira o quadro de voo automaticamente.",
+
+                "2/8 — Quadro de voo" to
+                    "Toque no mapa para desenhar o QUADRO DE VOO. Os pins podem ser arrastados para ajustar os vértices. Toque em um pin para ver suas coordenadas.",
+
+                "3/8 — Início" to
+                    "Use INÍCIO e depois toque no mapa próximo do lado onde deseja começar. O plano mantém a mesma geometria e prioriza o extremo mais próximo desse ponto.",
+
+                "4/8 — Gerar plano" to
+                    "Defina altura, velocidade e sobreposições e toque em APLICAR PLANO. Use -15°, +15° e INVERTER sem alterar o quadro desenhado.",
+
+                "5/8 — Mapa e camadas" to
+                    "SAT/MAP troca apenas o fundo do mapa. CAMADAS permite mostrar ou ocultar Referência, Quadro e Plano sem apagar os dados.",
+
+                "6/8 — Avançado" to
+                    "Toque em AVANÇADO para expandir ou recolher os campos DJI de gimbal, máximo de pontos e código DJI.",
+
+                "7/8 — Conferência" to
+                    "As setas sobre a rota mostram o sentido de deslocamento. Confira área, GSD, fotos, distância e tempo antes de exportar.",
+
+                "8/8 — Salvar e exportar" to
+                    "SALVAR guarda referência, quadro, parâmetros, início preferido e o plano atual. EXPORTAR KMZ mostra um resumo antes de criar a missão. O GUIA DJI continua disponível para o fluxo de transferência."
+            )
+
+        if (
+            step !in steps.indices
+        ) {
+
+            markTutorialShown()
+
+            return
+        }
+
+        val current =
+            steps[
+                step
+            ]
+
+        val last =
+            step ==
+                steps.lastIndex
+
+        AlertDialog.Builder(
+            this
+        )
+            .setTitle(
+                current.first
+            )
+            .setMessage(
+                current.second
+            )
+            .setPositiveButton(
+                if (last) {
+                    "CONCLUIR"
+                } else {
+                    "PRÓXIMO"
+                }
+            ) {
+                    _,
+                    _ ->
+
+                if (last) {
+
+                    markTutorialShown()
+
+                } else {
+
+                    showTutorial(
+                        step + 1
+                    )
+                }
+            }
+            .setNegativeButton(
+                "PULAR"
+            ) {
+                    _,
+                    _ ->
+
+                markTutorialShown()
+            }
+            .show()
+    }
+
+    private fun markTutorialShown() {
+
+        getSharedPreferences(
+            "nv_drone_consent",
+            MODE_PRIVATE
+        )
+            .edit()
+            .putBoolean(
+                "tutorialShown",
+                true
+            )
+            .apply()
     }
 
     private fun showPreviewKmlMenu() {
@@ -2323,9 +3726,7 @@ class MainActivity : AppCompatActivity() {
                     _,
                     which ->
 
-                when (
-                    which
-                ) {
+                when (which) {
 
                     0 -> {
 
@@ -2376,13 +3777,14 @@ class MainActivity : AppCompatActivity() {
                 "NV_Mapping_preview.kml"
             )
 
-        file.outputStream().use { out ->
+        file.outputStream()
+            .use { out ->
 
-            writePreviewKml(
-                current,
-                out
-            )
-        }
+                writePreviewKml(
+                    current,
+                    out
+                )
+            }
 
         return file
     }
@@ -2769,10 +4171,6 @@ class MainActivity : AppCompatActivity() {
                             last.accuracy
                         )
 
-                    /*
-                     * SUA LOCALIZAÇÃO =
-                     * PONTO AZUL PEQUENO.
-                     */
                     icon =
                         createUserLocationDotIcon()
 

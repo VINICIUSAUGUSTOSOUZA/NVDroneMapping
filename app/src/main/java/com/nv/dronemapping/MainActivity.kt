@@ -398,11 +398,16 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnUndo.setOnClickListener {
 
-            if (
-                flightBoundary.isNotEmpty()
-            ) {
+            try {
 
-                flightBoundary.removeLast()
+                if (flightBoundary.isEmpty()) {
+
+                    toast("Nada para desfazer")
+                    return@setOnClickListener
+                }
+
+                flightBoundary =
+                    flightBoundary.dropLast(1).toMutableList()
 
                 invalidatePlan()
 
@@ -411,6 +416,10 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 updateStatsAreaOnly()
+
+            } catch (e: Exception) {
+
+                toast("Não foi possível desfazer")
             }
         }
 
@@ -665,7 +674,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        flightBoundary.reverse()
+        // Mantém o perímetro original e inverte somente a direção
+        // da missão gerada.
+        flightBoundary =
+            flightBoundary.reversed().toMutableList()
 
         invalidatePlan()
 

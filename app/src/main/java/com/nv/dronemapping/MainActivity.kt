@@ -4,7 +4,7 @@ import com.nv.dronemapping.ui.AdvancedBlock
 import com.nv.dronemapping.ui.DJIBlock
 import com.nv.dronemapping.ui.FlightBlock
 import com.nv.dronemapping.ui.PhotogrammetryBlock
-import com.nv.dronemapping.ui.BottomMenu
+import com.nv.dronemapping.ui.BottomNavigation
 import android.widget.LinearLayout
 import android.view.ViewGroup
 
@@ -288,14 +288,14 @@ class MainActivity : AppCompatActivity() {
         )
 
         // Menu inferior NV Drone Mapping
-        val bottomMenu = BottomMenu(
+        val bottomMenu = BottomNavigation(
             this,
             onProject = { showProjectsDialog() },
-            onArea = { toast("Área selecionada") },
             onFlight = { toast("Voo selecionado") },
             onCapture = { toast("Captura selecionada") },
             onDJI = { toast("DJI selecionado") },
-            onAdvanced = { toggleAdvancedPanel() }
+            onAdvanced = { toggleAdvancedPanel() },
+            onArea = { toast("Área selecionada") }
         )
 
         addContentView(

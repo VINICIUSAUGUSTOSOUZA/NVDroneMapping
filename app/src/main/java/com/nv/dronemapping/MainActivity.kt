@@ -680,34 +680,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun invertFlightDirection() {
 
-        if (
-            flightBoundary.size < 3
-        ) {
+        val currentPlan = plan
 
-            toast(
-                "Desenhe o quadro de voo antes de inverter"
-            )
-
+        if (currentPlan == null) {
+            toast("Gere o plano de voo antes de inverter")
             return
         }
 
-        flightBoundary.reverse()
-
-        invalidatePlan()
-
-        redrawBoundary(
-            false
+        val invertedPlan = currentPlan.copy(
+            waypoints = currentPlan.waypoints.reversed(),
+            parts = currentPlan.parts.reversed().map {
+                it.reversed()
+            }
         )
 
-        updateStatsAreaOnly()
+        plan = invertedPlan
 
-        generateMission(
-            showToast = false
-        )
+        drawRoute(invertedPlan)
+        updateStats(invertedPlan)
+        updateBearingStatus(invertedPlan.stats.effectiveBearingDeg)
 
-        toast(
-            "Sentido do plano de voo invertido"
-        )
+        binding.txtHint.text =
+            "Plano invertido. Saída e chegada foram trocadas."
+
+        toast("Missão invertida: sentido, saída e chegada atualizados")
     }
 
     private fun generateMission(

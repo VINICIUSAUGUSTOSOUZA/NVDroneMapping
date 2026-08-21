@@ -1,29 +1,28 @@
 package com.nv.dronemapping.ui
 
 import android.content.Context
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Bloco expansível reutilizável para organizar opções do NV Drone Mapping.
- * Inicialmente fechado e abre/fecha ao tocar no título.
+ * Bloco expansível reutilizável para organizar opções
+ * do NV Drone Mapping.
  */
-class CollapsibleBlock(
+open class CollapsibleBlock(
     context: Context,
-    title: String
+    private val blockTitle: String
 ) : LinearLayout(context) {
 
-    private val contentContainer: LinearLayout
     private val titleView: TextView
+    private val contentContainer: LinearLayout
     private var expanded = false
 
     init {
         orientation = VERTICAL
 
         titleView = TextView(context).apply {
-            text = "▶ $title"
+            text = "▶ $blockTitle"
             textSize = 16f
             setPadding(24, 20, 24, 20)
         }
@@ -34,21 +33,23 @@ class CollapsibleBlock(
         }
 
         addView(titleView)
-
         addView(contentContainer)
 
         titleView.setOnClickListener {
             expanded = !expanded
-
-            contentContainer.visibility =
-                if (expanded) View.VISIBLE else View.GONE
-
-            titleView.text =
-                if (expanded)
-                    "▼ $title"
-                else
-                    "▶ $title"
+            updateState()
         }
+    }
+
+    private fun updateState() {
+        contentContainer.visibility =
+            if (expanded) View.VISIBLE else View.GONE
+
+        titleView.text =
+            if (expanded)
+                "▼ $blockTitle"
+            else
+                "▶ $blockTitle"
     }
 
     fun addContent(view: View) {
@@ -57,11 +58,11 @@ class CollapsibleBlock(
 
     fun open() {
         expanded = true
-        contentContainer.visibility = View.VISIBLE
+        updateState()
     }
 
     fun close() {
         expanded = false
-        contentContainer.visibility = View.GONE
+        updateState()
     }
 }

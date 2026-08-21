@@ -1,5 +1,12 @@
 package com.nv.dronemapping
 
+import com.nv.dronemapping.ui.AdvancedBlock
+import com.nv.dronemapping.ui.DJIBlock
+import com.nv.dronemapping.ui.FlightBlock
+import com.nv.dronemapping.ui.PhotogrammetryBlock
+import android.widget.LinearLayout
+import android.view.ViewGroup
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -280,6 +287,26 @@ class MainActivity : AppCompatActivity() {
             binding.root
         )
 
+
+        // Blocos de organizacao da interface (NV Drone Mapping)
+        // Mantem as funcoes existentes e prepara a nova interface.
+        val nvBlocksContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        nvBlocksContainer.addView(FlightBlock(this))
+        nvBlocksContainer.addView(PhotogrammetryBlock(this))
+        nvBlocksContainer.addView(DJIBlock(this))
+        nvBlocksContainer.addView(AdvancedBlock(this))
+
+        addContentView(
+            nvBlocksContainer,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+
         store =
             ProjectStore(
                 this
@@ -398,16 +425,11 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnUndo.setOnClickListener {
 
-            try {
+            if (
+                flightBoundary.isNotEmpty()
+            ) {
 
-                if (flightBoundary.isEmpty()) {
-
-                    toast("Nada para desfazer")
-                    return@setOnClickListener
-                }
-
-                flightBoundary =
-                    flightBoundary.dropLast(1).toMutableList()
+                flightBoundary.removeLast()
 
                 invalidatePlan()
 
@@ -416,10 +438,6 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 updateStatsAreaOnly()
-
-            } catch (e: Exception) {
-
-                toast("Não foi possível desfazer")
             }
         }
 
@@ -674,10 +692,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Mantém o perímetro original e inverte somente a direção
-        // da missão gerada.
-        flightBoundary =
-            flightBoundary.reversed().toMutableList()
+        flightBoundary.reverse()
 
         invalidatePlan()
 

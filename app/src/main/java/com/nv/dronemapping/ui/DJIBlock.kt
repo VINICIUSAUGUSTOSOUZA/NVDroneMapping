@@ -7,7 +7,7 @@ import android.widget.TextView
 
 /**
  * Bloco DJI
- * Organiza configuracoes especificas do drone e exportacao de missao.
+ * Mantém as configurações específicas do drone.
  */
 class DJIBlock(
     context: Context
@@ -19,41 +19,26 @@ class DJIBlock(
     private val container: LinearLayout
 
     init {
-
         container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
 
         addContent(container)
 
+        addTextOption("Modelo do drone e exportação DJI")
     }
-
 
     fun addOption(view: View) {
-
         container.addView(view)
-
     }
 
-
     fun addTextOption(textValue: String) {
-
         val text = TextView(context).apply {
-
             text = textValue
-
             textSize = 14f
-
-            setPadding(
-                24,
-                12,
-                24,
-                12
-            )
-
+            setPadding(24, 12, 24, 12)
         }
 
         container.addView(text)
-
     }
 }

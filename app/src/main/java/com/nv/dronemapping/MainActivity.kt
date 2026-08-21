@@ -290,7 +290,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         // Menu inferior NV Drone Mapping
-        val bottomMenu = BottomMenu(
+        val bottomMenu = BottomNavigation(
             this,
             onProject = { showProjectsDialog() },
             onArea = { toast("Área selecionada") },

@@ -287,25 +287,6 @@ class MainActivity : AppCompatActivity() {
         )
 
 
-        // Blocos de organizacao da interface (NV Drone Mapping)
-        // Mantem as funcoes existentes e prepara a nova interface.
-        val nvBlocksContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
-        nvBlocksContainer.addView(FlightBlock(this))
-        nvBlocksContainer.addView(PhotogrammetryBlock(this))
-        nvBlocksContainer.addView(DJIBlock(this))
-        nvBlocksContainer.addView(AdvancedBlock(this))
-
-        addContentView(
-            nvBlocksContainer,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
         store =
             ProjectStore(
                 this

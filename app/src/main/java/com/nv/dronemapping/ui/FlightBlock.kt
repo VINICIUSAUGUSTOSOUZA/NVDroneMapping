@@ -6,35 +6,39 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Bloco de planejamento de voo.
- * Mantém as opções de voo organizadas dentro do NV Drone Mapping.
+ * Bloco de Planejamento de Voo
+ * Mantém as configurações principais da missão.
  */
 class FlightBlock(
     context: Context
 ) : CollapsibleBlock(
     context,
-    "✈️ Planejamento de Voo"
+    "✈️ Voo"
 ) {
 
-    private val optionsContainer = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-    }
+    private val container: LinearLayout
 
     init {
-        addContent(optionsContainer)
+        container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        addContent(container)
+
+        addTextOption("Configurações de planejamento de voo")
     }
 
     fun addOption(view: View) {
-        optionsContainer.addView(view)
+        container.addView(view)
     }
 
-    fun addTextOption(label: String) {
+    fun addTextOption(textValue: String) {
         val text = TextView(context).apply {
-            this.text = label
+            text = textValue
             textSize = 14f
             setPadding(24, 12, 24, 12)
         }
 
-        optionsContainer.addView(text)
+        container.addView(text)
     }
 }

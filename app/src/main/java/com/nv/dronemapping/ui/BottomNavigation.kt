@@ -3,8 +3,8 @@ package com.nv.dronemapping.ui
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -18,44 +18,59 @@ class BottomNavigation(
     private val onArea: () -> Unit
 ) : LinearLayout(context) {
 
+    private val selectedColor = Color.rgb(33, 150, 243)
+    private val normalColor = Color.WHITE
+
+    private val items = mutableListOf<TextView>()
+
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER
-        setBackgroundColor(Color.rgb(20, 20, 20))
+        setPadding(6, 4, 6, 4)
+
+        background = GradientDrawable().apply {
+            setColor(Color.rgb(18, 18, 18))
+        }
 
         addItem("📁", "Projetos", onProject)
-        addItem("✈️", "Voo", onFlight)
+        addItem("✈", "Voo", onFlight)
         addItem("📷", "Foto", onCapture)
         addItem("🚁", "DJI", onDJI)
-        addItem("⚙️", "Avançado", onAdvanced)
-        addItem("🗺️", "Área", onArea)
+        addItem("⚙", "Avançado", onAdvanced)
+        addItem("🗺", "Área", onArea)
     }
 
-    private fun addItem(icon: String, title: String, action: () -> Unit) {
+    private fun addItem(
+        icon: String,
+        label: String,
+        action: () -> Unit
+    ) {
 
-        val item = LinearLayout(context).apply {
-            orientation = VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(4, 8, 4, 8)
-            setOnClickListener { action() }
-        }
+        val item = TextView(context).apply {
 
-        val iconView = TextView(context).apply {
-            text = icon
-            textSize = 22f
-            gravity = Gravity.CENTER
-        }
+            text = "$icon\n$label"
 
-        val titleView = TextView(context).apply {
-            text = title
             textSize = 10f
-            setTextColor(Color.WHITE)
+
             gravity = Gravity.CENTER
+
+            setTextColor(normalColor)
+
             typeface = Typeface.DEFAULT
+
+            setPadding(2, 6, 2, 6)
+
+            setOnClickListener {
+
+                clearSelection()
+
+                setTextColor(selectedColor)
+
+                action()
+            }
         }
 
-        item.addView(iconView)
-        item.addView(titleView)
+        items.add(item)
 
         addView(
             item,
@@ -65,5 +80,13 @@ class BottomNavigation(
                 1f
             )
         )
+    }
+
+    private fun clearSelection() {
+
+        items.forEach {
+
+            it.setTextColor(normalColor)
+        }
     }
 }

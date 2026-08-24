@@ -1,35 +1,43 @@
 package com.nv.dronemapping.ui
 
-import android.view.View
-import android.view.ViewGroup
+import android.content.Context
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 
 class PanelHost(
-    private val parent: ViewGroup
-) {
+    context: Context
+) : FrameLayout(context) {
 
-    private var current: View? = null
+    private var currentPanel: LinearLayout? = null
 
-    fun show(view: View) {
-
-        hide()
-
-        current = view
-
-        parent.addView(view)
-
-        view.visibility = View.VISIBLE
+    init {
+        layoutParams = LayoutParams(
+            LayoutParams.MATCH_PARENT,
+            LayoutParams.WRAP_CONTENT
+        )
     }
 
-    fun hide() {
 
-        current?.let {
-            parent.removeView(it)
-        }
+    fun showPanel(panel: LinearLayout) {
 
-        current = null
+        removeAllViews()
+
+        currentPanel = panel
+
+        addView(
+            panel,
+            LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.WRAP_CONTENT
+            )
+        )
     }
 
-    fun isOpen(): Boolean {
-        return current != null
+
+    fun clearPanel() {
+
+        removeAllViews()
+
+        currentPanel = null
     }
 }

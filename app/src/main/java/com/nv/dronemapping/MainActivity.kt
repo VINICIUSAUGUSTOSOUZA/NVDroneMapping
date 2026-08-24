@@ -316,9 +316,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupPlanningNavigation() {
 
-        val planningContent =
-            binding.panel.getChildAt(0) as LinearLayout
-
         val navigation =
             BottomNavigation(
                 this,
@@ -344,16 +341,12 @@ class MainActivity : AppCompatActivity() {
                 }
             )
 
-        planningContent.addView(
+        binding.bottomNavigationContainer.addView(
             navigation,
-            1,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                topMargin =
-                    (5f * resources.displayMetrics.density).toInt()
-            }
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
         )
     }
 

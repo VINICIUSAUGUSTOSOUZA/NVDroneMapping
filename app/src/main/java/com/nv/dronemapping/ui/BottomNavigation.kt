@@ -28,7 +28,7 @@ class BottomNavigation(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER
 
-        setPadding(6, 4, 6, 4)
+        setPadding(8, 8, 8, 8)
 
         background = GradientDrawable().apply {
             setColor(Color.rgb(18, 18, 18))
@@ -53,16 +53,17 @@ class BottomNavigation(
 
             text = "$icon\n$label"
 
-            textSize = 10f
+            textSize = 13f
 
             gravity = Gravity.CENTER
 
             setTextColor(normalColor)
 
-            typeface = Typeface.DEFAULT
+            typeface = Typeface.DEFAULT_BOLD
 
-            setPadding(2, 6, 2, 6)
+            setPadding(4, 10, 4, 10)
 
+            setLines(2)
 
             setOnClickListener {
 

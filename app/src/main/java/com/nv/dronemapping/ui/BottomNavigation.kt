@@ -24,8 +24,10 @@ class BottomNavigation(
     private val items = mutableListOf<TextView>()
 
     init {
+
         orientation = HORIZONTAL
         gravity = Gravity.CENTER
+
         setPadding(6, 4, 6, 4)
 
         background = GradientDrawable().apply {
@@ -39,6 +41,7 @@ class BottomNavigation(
         addItem("⚙", "Avançado", onAdvanced)
         addItem("🗺", "Área", onArea)
     }
+
 
     private fun addItem(
         icon: String,
@@ -60,17 +63,18 @@ class BottomNavigation(
 
             setPadding(2, 6, 2, 6)
 
+
             setOnClickListener {
 
-                clearSelection()
-
-                setTextColor(selectedColor)
+                selectItem(this)
 
                 action()
             }
         }
 
+
         items.add(item)
+
 
         addView(
             item,
@@ -82,11 +86,15 @@ class BottomNavigation(
         )
     }
 
-    private fun clearSelection() {
+
+    private fun selectItem(selected: TextView) {
 
         items.forEach {
 
             it.setTextColor(normalColor)
+
         }
+
+        selected.setTextColor(selectedColor)
     }
 }

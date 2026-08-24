@@ -289,26 +289,8 @@ class MainActivity : AppCompatActivity() {
             binding.root
         )
 
-        // Menu inferior NV Drone Mapping
-        val bottomMenu = BottomNavigation(
-            this,
-            onProject = { showProjectsDialog() },
-            onArea = { toast("Área selecionada") },
-            onFlight = { toast("Voo selecionado") },
-            onCapture = { toast("Captura selecionada") },
-            onDJI = { toast("DJI selecionado") },
-            onAdvanced = { toggleAdvancedPanel() }
-        )
-
-        addContentView(
-            bottomMenu,
-            android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                android.view.Gravity.BOTTOM
-            )
-        )
-
+        // Menu de navegação será reposicionado junto ao painel de planejamento.
+        // Removido o menu fixo inferior para evitar duplicidade de navegação.
 
         store =
             ProjectStore(

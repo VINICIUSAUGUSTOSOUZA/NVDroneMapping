@@ -171,6 +171,7 @@ android:background="@color/light_bg">
         app:layout_constraintStart_toStartOf="parent">
 
         <LinearLayout
+            android:id="@+id/panelContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
@@ -640,4 +641,4 @@ android:background="@color/light_bg">
 
     </ScrollView>
 
-</androidx.constraintlayout.widget.ConstraintLayou
+</androidx.constraintlayout.widget.Const

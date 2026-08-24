@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="PROJETOS"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="8dp"/>
+
+
+    <EditText
+        android:id="@+id/projectName"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:hint="Nome do projeto"
+        android:inputType="text"
+        android:padding="10dp"/>
+
+
+    <Button
+        android:id="@+id/btnSaveNewProject"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:text="SALVAR PROJETO"
+        android:layout_marginTop="8dp"/>
+
+
+    <Button
+        android:id="@+id/btnOpenProjects"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:text="PROJETOS SALVOS"
+        android:layout_marginTop="8dp"/>
+
+
+    <TextView
+        android:id="@+id/projectListInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Nenhum projeto selecionado"
+        android:padding="12dp"
+        android:textSize="14sp"/>
+
+
+</LinearLayout>

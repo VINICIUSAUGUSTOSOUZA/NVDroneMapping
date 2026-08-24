@@ -7,6 +7,10 @@ class MenuPanelFactory {
 
     companion object {
 
+        fun createProjects(context: Context): LinearLayout {
+            return DronePanels.createProjectsPanel(context)
+        }
+
         fun createFlight(context: Context): LinearLayout {
             return DronePanels.createFlightPanel(context)
         }
@@ -17,6 +21,14 @@ class MenuPanelFactory {
 
         fun createDJI(context: Context): LinearLayout {
             return DronePanels.createDjiPanel(context)
+        }
+
+        fun createAdvanced(context: Context): LinearLayout {
+            return DronePanels.createAdvancedPanel(context)
+        }
+
+        fun createArea(context: Context): LinearLayout {
+            return DronePanels.createAreaPanel(context)
         }
     }
 }

@@ -1,41 +1,19 @@
 package com.nv.dronemapping.ui
 
-import android.view.View
-import android.view.ViewGroup
+import android.widget.LinearLayout
 
 class PanelController(
-    private val container: ViewGroup
+    private val panelHost: PanelHost
 ) {
 
-    private var currentPanel: View? = null
+    fun show(panel: LinearLayout) {
 
-    fun open(panel: View) {
-
-        close()
-
-        currentPanel = panel
-
-        container.addView(panel)
-
-        panel.visibility = View.VISIBLE
+        panelHost.showPanel(panel)
     }
 
-    fun close() {
 
-        currentPanel?.let { view ->
+    fun clear() {
 
-            container.removeView(view)
-        }
-
-        currentPanel = null
-    }
-
-    fun toggle(panel: View) {
-
-        if (currentPanel == panel) {
-            close()
-        } else {
-            open(panel)
-        }
+        panelHost.clearPanel()
     }
 }

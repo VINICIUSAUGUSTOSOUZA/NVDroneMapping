@@ -1,13 +1,7 @@
 package com.nv.dronemapping
 
-import com.nv.dronemapping.ui.AdvancedBlock
-import com.nv.dronemapping.ui.DJIBlock
-import com.nv.dronemapping.ui.FlightBlock
-import com.nv.dronemapping.ui.PhotogrammetryBlock
 import com.nv.dronemapping.ui.BottomNavigation
-import com.nv.dronemapping.ui.PanelController
 import android.widget.LinearLayout
-import android.view.ViewGroup
 
 import android.Manifest
 import android.content.Intent
@@ -18,6 +12,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.DashPathEffect
+import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.location.LocationManager
 import android.net.Uri
@@ -68,7 +63,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var store: ProjectStore
-    private lateinit var panelController: PanelController
 
     private val referenceBoundary = mutableListOf<LatLng>()
     private val flightBoundary = mutableListOf<LatLng>()
@@ -289,8 +283,7 @@ class MainActivity : AppCompatActivity() {
             binding.root
         )
 
-        // Menu de navegação será reposicionado junto ao painel de planejamento.
-        // Removido o menu fixo inferior para evitar duplicidade de navegação.
+        setupPlanningNavigation()
 
         store =
             ProjectStore(
@@ -319,6 +312,71 @@ class MainActivity : AppCompatActivity() {
         updateBearingStatus()
         updateStatsAreaOnly()
         ensureConsentAndTutorial()
+    }
+
+    private fun setupPlanningNavigation() {
+
+        val planningContent =
+            binding.panel.getChildAt(0) as LinearLayout
+
+        val navigation =
+            BottomNavigation(
+                this,
+                onProject = {
+                    showProjectsDialog()
+                },
+                onFlight = {
+                    scrollPlanningTo(binding.inAltitude)
+                },
+                onCapture = {
+                    scrollPlanningTo(binding.inFrontOverlap)
+                },
+                onDJI = {
+                    showDjiGuide()
+                },
+                onAdvanced = {
+                    toggleAdvancedPanel()
+                    scrollPlanningTo(binding.btnAdvanced)
+                },
+                onArea = {
+                    updateStatsAreaOnly()
+                    scrollPlanningTo(binding.txtStats)
+                }
+            )
+
+        planningContent.addView(
+            navigation,
+            1,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin =
+                    (5f * resources.displayMetrics.density).toInt()
+            }
+        )
+    }
+
+    private fun scrollPlanningTo(
+        view: View
+    ) {
+
+        binding.panel.post {
+            val planningContent =
+                binding.panel.getChildAt(0) as LinearLayout
+
+            val position = Rect()
+            view.getDrawingRect(position)
+            planningContent.offsetDescendantRectToMyCoords(
+                view,
+                position
+            )
+
+            binding.panel.smoothScrollTo(
+                0,
+                position.top
+            )
+        }
     }
 
     private fun setupMap() {

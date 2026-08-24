@@ -151,7 +151,14 @@
             android:textColor="@color/white"
             android:textSize="11sp" />
 
-    </FrameLayout>
+   <FrameLayout
+    android:id="@+id/bottomNavigationContainer"
+    android:layout_width="0dp"
+    android:layout_height="60dp"
+    android:background="@color/white"
+    app:layout_constraintBottom_toTopOf="@id/panel"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent" />
 
     <ScrollView
         android:id="@+id/panel"
@@ -168,15 +175,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="9dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="PLANEJAMENTO DO VOO"
-                android:textColor="@color/navy"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
+      
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

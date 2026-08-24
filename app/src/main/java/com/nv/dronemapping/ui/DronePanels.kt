@@ -43,7 +43,23 @@ object DronePanels {
         return panel
     }
 
+
+    fun createProjectsPanel(context: Context): LinearLayout {
+
+        return createPanel(
+            context,
+            "PROJETOS",
+            listOf(
+                "Novo projeto",
+                "Abrir projeto",
+                "Projetos salvos"
+            )
+        )
+    }
+
+
     fun createFlightPanel(context: Context): LinearLayout {
+
         return createPanel(
             context,
             "VOO",
@@ -57,7 +73,9 @@ object DronePanels {
         )
     }
 
+
     fun createCapturePanel(context: Context): LinearLayout {
+
         return createPanel(
             context,
             "CAPTURA",
@@ -69,7 +87,9 @@ object DronePanels {
         )
     }
 
+
     fun createDjiPanel(context: Context): LinearLayout {
+
         return createPanel(
             context,
             "DJI",
@@ -77,6 +97,34 @@ object DronePanels {
                 "Drone",
                 "Configurações DJI",
                 "Exportação"
+            )
+        )
+    }
+
+
+    fun createAdvancedPanel(context: Context): LinearLayout {
+
+        return createPanel(
+            context,
+            "AVANÇADO",
+            listOf(
+                "Configurações avançadas",
+                "Ajustes da missão",
+                "Parâmetros"
+            )
+        )
+    }
+
+
+    fun createAreaPanel(context: Context): LinearLayout {
+
+        return createPanel(
+            context,
+            "ÁREA",
+            listOf(
+                "Desenhar área",
+                "Importar KML",
+                "Limpar área"
             )
         )
     }

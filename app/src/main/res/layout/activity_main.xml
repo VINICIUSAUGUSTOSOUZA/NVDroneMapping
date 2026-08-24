@@ -125,11 +125,11 @@ android:background="@color/light_bg">
                 android:id="@+id/btnMyLocation"
                 android:layout_width="42dp"
                 android:layout_height="42dp"
-                android:backgroundTint="@color/navy"
+                android:backgroundTint="#1976D2"
                 android:minHeight="0dp"
                 android:minWidth="0dp"
                 android:padding="0dp"
-                android:text="⌖"
+                android:text="⌾"
                 android:textColor="@color/white"
                 android:textSize="19sp" />
 
@@ -640,4 +640,4 @@ android:background="@color/light_bg">
 
     </ScrollView>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.constraintlayout.widget.ConstraintLayou

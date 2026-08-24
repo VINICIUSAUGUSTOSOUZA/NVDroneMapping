@@ -151,7 +151,9 @@
             android:textColor="@color/white"
             android:textSize="11sp" />
 
-   <FrameLayout
+    </FrameLayout>
+
+    <FrameLayout
     android:id="@+id/bottomNavigationContainer"
     android:layout_width="0dp"
     android:layout_height="60dp"
@@ -640,4 +642,4 @@
 
     </ScrollView>
 
-</androidx.constraintlayout.widget.Constraint
+</androidx.constraintlayout.widget.

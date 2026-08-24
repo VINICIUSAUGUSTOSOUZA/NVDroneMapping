@@ -1,31 +1,65 @@
 package com.nv.dronemapping.ui
 
-import android.view.ViewGroup
+import android.content.Context
 
-class PanelActions(
-    private val host: PanelHost,
-    private val parent: ViewGroup
-) {
+object PanelActions {
 
-    fun openFlight() {
-        host.show(
-            MenuPanelFactory.createFlight(parent.context)
+    fun openProjects(
+        context: Context,
+        controller: PanelController
+    ) {
+        controller.show(
+            DronePanels.createProjectsPanel(context)
         )
     }
 
-    fun openCapture() {
-        host.show(
-            MenuPanelFactory.createCapture(parent.context)
+
+    fun openFlight(
+        context: Context,
+        controller: PanelController
+    ) {
+        controller.show(
+            DronePanels.createFlightPanel(context)
         )
     }
 
-    fun openDJI() {
-        host.show(
-            MenuPanelFactory.createDJI(parent.context)
+
+    fun openCapture(
+        context: Context,
+        controller: PanelController
+    ) {
+        controller.show(
+            DronePanels.createCapturePanel(context)
         )
     }
 
-    fun close() {
-        host.hide()
+
+    fun openDJI(
+        context: Context,
+        controller: PanelController
+    ) {
+        controller.show(
+            DronePanels.createDjiPanel(context)
+        )
+    }
+
+
+    fun openAdvanced(
+        context: Context,
+        controller: PanelController
+    ) {
+        controller.show(
+            DronePanels.createAdvancedPanel(context)
+        )
+    }
+
+
+    fun openArea(
+        context: Context,
+        controller: PanelController
+    ) {
+        controller.show(
+            DronePanels.createAreaPanel(context)
+        )
     }
 }

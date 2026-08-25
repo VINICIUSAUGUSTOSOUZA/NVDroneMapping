@@ -1,63 +1,48 @@
 package com.nv.dronemapping
 
-import com.nv.dronemapping.ui.BottomNavigation
-import android.widget.LinearLayout
+import com.nv.dronemapping.ui.BottomNavigation import
+android.widget.LinearLayout
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.DashPathEffect
-import android.graphics.Rect
-import android.graphics.drawable.BitmapDrawable
-import android.location.LocationManager
-import android.net.Uri
-import android.provider.OpenableColumns
-import android.os.Bundle
-import android.view.View
-import android.view.LayoutInflater
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
-import com.nv.dronemapping.databinding.ActivityMainBinding
-import com.nv.dronemapping.dji.KmzExporter
-import com.nv.dronemapping.geometry.GeoMath
-import com.nv.dronemapping.geometry.GridPlanner
-import com.nv.dronemapping.io.DxfImporter
-import com.nv.dronemapping.io.KmlImporter
-import com.nv.dronemapping.model.LatLng
-import com.nv.dronemapping.model.MissionPlan
-import com.nv.dronemapping.model.MissionSettings
-import com.nv.dronemapping.model.SavedProject
-import com.nv.dronemapping.storage.ProjectStore
-import org.osmdroid.config.Configuration
-import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.MapTileIndex
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.overlay.MapEventsOverlay
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polygon
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.ScaleBarOverlay
-import java.io.File
-import java.io.OutputStream
-import java.io.OutputStreamWriter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import android.Manifest import android.content.Intent import
+android.content.pm.PackageManager import android.graphics.Bitmap import
+android.graphics.Canvas import android.graphics.Color import
+android.graphics.Paint import android.graphics.Path import
+android.graphics.DashPathEffect import android.graphics.Rect import
+android.graphics.drawable.BitmapDrawable import
+android.location.LocationManager import android.net.Uri import
+android.provider.OpenableColumns import android.os.Bundle import
+android.view.View import android.view.LayoutInflater import
+android.widget.CheckBox import android.widget.EditText import
+android.widget.TextView import android.widget.Toast import
+androidx.activity.result.contract.ActivityResultContracts import
+androidx.appcompat.app.AlertDialog import
+androidx.appcompat.app.AppCompatActivity import
+androidx.core.content.ContextCompat import
+androidx.core.content.FileProvider import
+com.nv.dronemapping.databinding.ActivityMainBinding import
+com.nv.dronemapping.dji.KmzExporter import
+com.nv.dronemapping.geometry.GeoMath import
+com.nv.dronemapping.geometry.GridPlanner import
+com.nv.dronemapping.io.DxfImporter import
+com.nv.dronemapping.io.KmlImporter import
+com.nv.dronemapping.model.LatLng import
+com.nv.dronemapping.model.MissionPlan import
+com.nv.dronemapping.model.MissionSettings import
+com.nv.dronemapping.model.SavedProject import
+com.nv.dronemapping.storage.ProjectStore import
+org.osmdroid.config.Configuration import
+org.osmdroid.events.MapEventsReceiver import
+org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase import
+org.osmdroid.tileprovider.tilesource.TileSourceFactory import
+org.osmdroid.util.BoundingBox import org.osmdroid.util.MapTileIndex
+import org.osmdroid.util.GeoPoint import
+org.osmdroid.views.overlay.MapEventsOverlay import
+org.osmdroid.views.overlay.Marker import
+org.osmdroid.views.overlay.Polygon import
+org.osmdroid.views.overlay.Polyline import
+org.osmdroid.views.overlay.ScaleBarOverlay import java.io.File import
+java.io.OutputStream import java.io.OutputStreamWriter import
+java.text.SimpleDateFormat import java.util.Date import java.util.Locale
 import kotlin.math.ceil
 
 class MainActivity : AppCompatActivity() {
@@ -617,7 +602,13 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnMyLocation.apply {
 
+            visibility = View.VISIBLE
+
             bringToFront()
+
+            post {
+                bringToFront()
+            }
 
             setOnClickListener {
 
@@ -4247,4 +4238,5 @@ class MainActivity : AppCompatActivity() {
 
         super.onPause()
     }
+
 }

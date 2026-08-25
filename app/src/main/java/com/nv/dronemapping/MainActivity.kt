@@ -1825,6 +1825,16 @@ class MainActivity : AppCompatActivity() {
 
         binding.panelContainer.removeAllViews()
         binding.panelContainer.addView(panel)
+
+        panel.findViewById<android.widget.Button>(R.id.btnSaveNewProject)
+            .setOnClickListener {
+                showSaveProjectDialog()
+            }
+
+        panel.findViewById<android.widget.Button>(R.id.btnOpenProjects)
+            .setOnClickListener {
+                showProjectsDialog()
+            }
     }
 
     private fun showProjectsDialog() {

@@ -321,24 +321,48 @@ class MainActivity : AppCompatActivity() {
             BottomNavigation(
                 this,
                 onProject = {
-                    showProjectPanel()
+                    runCatching {
+                        showProjectPanel()
+                    }.onFailure {
+                        toast("Erro ao abrir Projetos: ${it.message}")
+                    }
                 },
                 onFlight = {
-                    scrollPlanningTo(binding.inAltitude)
+                    runCatching {
+                        scrollPlanningTo(binding.inAltitude)
+                    }.onFailure {
+                        toast("Erro ao abrir Voo: ${it.message}")
+                    }
                 },
                 onCapture = {
-                    scrollPlanningTo(binding.inFrontOverlap)
+                    runCatching {
+                        scrollPlanningTo(binding.inFrontOverlap)
+                    }.onFailure {
+                        toast("Erro ao abrir Foto: ${it.message}")
+                    }
                 },
                 onDJI = {
-                    showDjiGuide()
+                    runCatching {
+                        showDjiGuide()
+                    }.onFailure {
+                        toast("Erro ao abrir DJI: ${it.message}")
+                    }
                 },
                 onAdvanced = {
-                    toggleAdvancedPanel()
-                    scrollPlanningTo(binding.btnAdvanced)
+                    runCatching {
+                        toggleAdvancedPanel()
+                        scrollPlanningTo(binding.btnAdvanced)
+                    }.onFailure {
+                        toast("Erro no Avançado: ${it.message}")
+                    }
                 },
                 onArea = {
-                    updateStatsAreaOnly()
-                    scrollPlanningTo(binding.txtStats)
+                    runCatching {
+                        updateStatsAreaOnly()
+                        scrollPlanningTo(binding.txtStats)
+                    }.onFailure {
+                        toast("Erro ao abrir Área: ${it.message}")
+                    }
                 }
             )
 

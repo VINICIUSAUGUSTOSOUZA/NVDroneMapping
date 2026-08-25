@@ -38,143 +38,113 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
 
-        <!-- MAPVIEW - Agora com atributos para não bloquear controles -->
         <org.osmdroid.views.MapView
             android:id="@+id/map"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clickable="true"
-            android:focusable="true"
-            android:focusableInTouchMode="true" />
+            android:layout_height="match_parent" />
 
-        <!-- 🔥 CORREÇÃO: Container de controles com CLIP CHILDREN desabilitado -->
-        <FrameLayout
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:elevation="100dp"
-            android:translationZ="100dp">
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:orientation="horizontal"
+            android:padding="7dp">
 
-            <!-- Botões superiores (preservados) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top"
-                android:orientation="horizontal"
-                android:padding="7dp"
-                android:elevation="80dp"
-                android:translationZ="80dp">
+            <Button
+                android:id="@+id/btnUndo"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="DESFAZER"
+                android:textSize="10sp" />
 
-                <Button
-                    android:id="@+id/btnUndo"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="DESFAZER"
-                    android:textSize="10sp"
-                    android:elevation="50dp" />
+            <Space
+                android:layout_width="5dp"
+                android:layout_height="1dp" />
 
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
+            <Button
+                android:id="@+id/btnClear"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="LIMPAR"
+                android:textSize="10sp" />
 
-                <Button
-                    android:id="@+id/btnClear"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="LIMPAR"
-                    android:textSize="10sp"
-                    android:elevation="50dp" />
+            <Space
+                android:layout_width="5dp"
+                android:layout_height="1dp" />
 
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
+            <Button
+                android:id="@+id/btnImport"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="IMPORTAR REF"
+                android:textSize="9sp" />
 
-                <Button
-                    android:id="@+id/btnImport"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="IMPORTAR REF"
-                    android:textSize="9sp"
-                    android:elevation="50dp" />
+        </LinearLayout>
 
-            </LinearLayout>
+        <LinearLayout
+            android:id="@+id/mapControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="10dp"
+            android:orientation="vertical"
+             android:clipChildren="false"
+             android:clipToPadding="false"
+             android:elevation="50dp"
+             android:translationZ="50dp">
 
-            <!-- 🔥 CORREÇÃO: Container inferior com elevação máxima -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="10dp"
-                android:orientation="vertical"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:elevation="200dp"
-                android:translationZ="200dp">
+            <Button
+                android:id="@+id/btnMapType"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginBottom="7dp"
+                android:backgroundTint="@color/navy"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="SAT"
+                android:textColor="@color/white"
+                android:textSize="10sp" />
 
-                <Button
-                    android:id="@+id/btnMapType"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
-                    android:layout_marginBottom="7dp"
-                    android:backgroundTint="@color/navy"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:padding="0dp"
-                    android:text="SAT"
-                    android:textColor="@color/white"
-                    android:textSize="10sp"
-                    android:elevation="150dp"
-                    android:translationZ="150dp" />
+            <Button
+                android:id="@+id/btnFitBoundary"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginBottom="7dp"
+                android:backgroundTint="@color/navy"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="▣"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
 
-                <Button
-                    android:id="@+id/btnFitBoundary"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
-                    android:layout_marginBottom="7dp"
-                    android:backgroundTint="@color/navy"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:padding="0dp"
-                    android:text="▣"
-                    android:textColor="@color/white"
-                    android:textSize="17sp"
-                    android:elevation="150dp"
-                    android:translationZ="150dp" />
+            <Button
+                android:id="@+id/btnMyLocation"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginBottom="7dp"
+                android:elevation="12dp"
+                android:translationZ="12dp"
+                android:backgroundTint="#1976D2"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="⌾"
+                android:textColor="@color/white"
+                android:textSize="19sp" />
 
-                <!-- 🔥 BOTÃO DE LOCALIZAÇÃO CORRIGIDO -->
-                <Button
-                    android:id="@+id/btnMyLocation"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
-                    android:layout_marginBottom="7dp"
-                    android:backgroundTint="#1976D2"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:padding="0dp"
-                    android:text="⌾"
-                    android:textColor="@color/white"
-                    android:textSize="19sp"
-                    android:elevation="250dp"
-                    android:translationZ="250dp"
-                    android:visibility="visible"
-                    android:clickable="true"
-                    android:focusable="true" />
+        </LinearLayout>
 
-            </LinearLayout>
-
-        </FrameLayout>
-
-        <!-- Hint (preservado) -->
         <TextView
             android:id="@+id/txtHint"
             android:layout_width="wrap_content"
@@ -187,19 +157,18 @@
             android:paddingVertical="6dp"
             android:text="Toque no mapa para desenhar o QUADRO DE VOO"
             android:textColor="@color/white"
-            android:textSize="11sp"
-            android:elevation="50dp" />
+            android:textSize="11sp" />
 
     </FrameLayout>
 
     <FrameLayout
-        android:id="@+id/bottomNavigationContainer"
-        android:layout_width="0dp"
-        android:layout_height="60dp"
-        android:background="@color/white"
-        app:layout_constraintBottom_toTopOf="@id/panel"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+    android:id="@+id/bottomNavigationContainer"
+    android:layout_width="0dp"
+    android:layout_height="60dp"
+    android:background="@color/white"
+    app:layout_constraintBottom_toTopOf="@id/panel"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent" />
 
     <ScrollView
         android:id="@+id/panel"
@@ -682,4 +651,4 @@
 
     </ScrollView>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.constraintlayout.widget.Constrain

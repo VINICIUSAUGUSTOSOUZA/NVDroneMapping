@@ -380,21 +380,36 @@ class MainActivity : AppCompatActivity() {
     ) {
 
         binding.panel.post {
-            val planningContent =
-                binding.panel.getChildAt(0) as? LinearLayout
-                    ?: return@post
 
-            val position = Rect()
-            view.getDrawingRect(position)
-            planningContent.offsetDescendantRectToMyCoords(
-                view,
-                position
-            )
+            runCatching {
 
-            binding.panel.smoothScrollTo(
-                0,
-                position.top
-            )
+                val planningContent =
+                    binding.panel.getChildAt(0) as? LinearLayout
+                        ?: return@runCatching
+
+                if (view.parent == null) {
+                    return@runCatching
+                }
+
+                val position = Rect()
+
+                view.getDrawingRect(position)
+
+                planningContent.offsetDescendantRectToMyCoords(
+                    view,
+                    position
+                )
+
+                binding.panel.smoothScrollTo(
+                    0,
+                    position.top
+                )
+
+            }.onFailure {
+
+                toast("Não foi possível localizar esta seção")
+
+            }
         }
     }
 
@@ -600,9 +615,15 @@ class MainActivity : AppCompatActivity() {
             showProjectsDialog()
         }
 
-        binding.btnMyLocation.setOnClickListener {
+        binding.btnMyLocation.apply {
 
-            requestLocationAndLocate()
+            bringToFront()
+
+            setOnClickListener {
+
+                requestLocationAndLocate()
+
+            }
         }
 
         binding.btnFitBoundary.setOnClickListener {

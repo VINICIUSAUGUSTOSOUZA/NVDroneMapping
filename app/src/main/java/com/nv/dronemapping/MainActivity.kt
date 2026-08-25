@@ -19,6 +19,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.os.Bundle
 import android.view.View
+import android.view.LayoutInflater
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.TextView
@@ -320,7 +321,7 @@ class MainActivity : AppCompatActivity() {
             BottomNavigation(
                 this,
                 onProject = {
-                    showProjectsDialog()
+                    showProjectPanel()
                 },
                 onFlight = {
                     scrollPlanningTo(binding.inAltitude)
@@ -1808,6 +1809,22 @@ class MainActivity : AppCompatActivity() {
                 null
             )
             .show()
+    }
+
+
+    private fun showProjectPanel() {
+
+        val panel =
+            LayoutInflater
+                .from(this)
+                .inflate(
+                    R.layout.panel_projects,
+                    binding.panelContainer,
+                    false
+                )
+
+        binding.panelContainer.removeAllViews()
+        binding.panelContainer.addView(panel)
     }
 
     private fun showProjectsDialog() {

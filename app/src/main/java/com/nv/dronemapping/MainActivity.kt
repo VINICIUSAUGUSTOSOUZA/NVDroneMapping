@@ -357,7 +357,8 @@ class MainActivity : AppCompatActivity() {
 
         binding.panel.post {
             val planningContent =
-                binding.panel.getChildAt(0) as LinearLayout
+                binding.panel.getChildAt(0) as? LinearLayout
+                    ?: return@post
 
             val position = Rect()
             view.getDrawingRect(position)

@@ -1819,22 +1819,29 @@ class MainActivity : AppCompatActivity() {
                 .from(this)
                 .inflate(
                     R.layout.panel_projects,
-                    binding.panelContainer,
+                    null,
                     false
                 )
 
-        binding.panelContainer.removeAllViews()
-        binding.panelContainer.addView(panel)
+        val dialog =
+            AlertDialog.Builder(this)
+                .setTitle("Projetos")
+                .setView(panel)
+                .create()
 
         panel.findViewById<android.widget.Button>(R.id.btnSaveNewProject)
             .setOnClickListener {
+                dialog.dismiss()
                 showSaveProjectDialog()
             }
 
         panel.findViewById<android.widget.Button>(R.id.btnOpenProjects)
             .setOnClickListener {
+                dialog.dismiss()
                 showProjectsDialog()
             }
+
+        dialog.show()
     }
 
     private fun showProjectsDialog() {

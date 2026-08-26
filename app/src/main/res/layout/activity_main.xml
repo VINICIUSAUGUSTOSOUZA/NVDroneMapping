@@ -33,7 +33,7 @@
         android:id="@+id/mapContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@id/panel"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavigationContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
@@ -97,10 +97,10 @@
             android:layout_gravity="bottom|end"
             android:layout_margin="10dp"
             android:orientation="vertical"
-             android:clipChildren="false"
-             android:clipToPadding="false"
-             android:elevation="50dp"
-             android:translationZ="50dp">
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:elevation="50dp"
+            android:translationZ="50dp">
 
             <Button
                 android:id="@+id/btnMapType"
@@ -162,13 +162,13 @@
     </FrameLayout>
 
     <FrameLayout
-    android:id="@+id/bottomNavigationContainer"
-    android:layout_width="0dp"
-    android:layout_height="60dp"
-    android:background="@color/white"
-    app:layout_constraintBottom_toTopOf="@id/panel"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintStart_toStartOf="parent" />
+        android:id="@+id/bottomNavigationContainer"
+        android:layout_width="0dp"
+        android:layout_height="60dp"
+        android:background="@color/white"
+        app:layout_constraintBottom_toTopOf="@id/panel"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <ScrollView
         android:id="@+id/panel"
@@ -186,7 +186,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="9dp">
-      
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -651,4 +651,4 @@
 
     </ScrollView>
 
-</androidx.constraintlayout.widget.Constrain
+</androidx.constraintlayout.widget.ConstraintLayout>

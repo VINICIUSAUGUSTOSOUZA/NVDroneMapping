@@ -1,5 +1,6 @@
 name: Build Android APK
 
+# CI verification after fixing activity_main.xml
 on:
   workflow_dispatch:
   push:

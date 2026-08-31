@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import com.nv.dronemapping.ui.ProfessionalMissionController
 import com.nv.dronemapping.ui.SmartPlanningController
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
@@ -16,12 +17,12 @@ import kotlin.math.pow
 /**
  * Política isolada do mapa de satélite.
  *
- * Até o zoom 18 usamos os tiles normais do Esri World Imagery, que são rápidos.
+ * Até o zoom 17 usamos os tiles normais do Esri World Imagery, que são rápidos.
  * Nos níveis mais próximos usamos o endpoint /export do mesmo MapServer. O export
  * renderiza a melhor imagem disponível para o bbox solicitado e evita depender de
  * um tile nativo de alta resolução que pode ser a imagem "Map data not yet available".
  *
- * O nome da fonte é novo para não reutilizar o cache das tentativas anteriores.
+ * O nome da fonte é novo para não reutilizar caches de tentativas anteriores.
  * Nenhuma regra de missão, rota, fotos, projetos ou exportação do NV Mapping é alterada.
  */
 class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCallbacks {
@@ -37,6 +38,7 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
         activity.window.decorView.post {
             installSatellitePolicy(activity)
             SmartPlanningController(activity).install()
+            ProfessionalMissionController(activity).install()
         }
     }
 
@@ -64,6 +66,7 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
             sourceName == ESRI_SOURCE_NAME ||
             sourceName == OLD_SAFE_ESRI_SOURCE_NAME ||
             sourceName == OLD_FALLBACK_ESRI_SOURCE_NAME ||
+            sourceName == OLD_ADAPTIVE_ESRI_SOURCE_NAME ||
             sourceName == ADAPTIVE_ESRI_SOURCE_NAME
         ) {
             val center = GeoPoint(
@@ -145,10 +148,11 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
         private const val ESRI_SOURCE_NAME = "EsriWorldImagery"
         private const val OLD_SAFE_ESRI_SOURCE_NAME = "EsriWorldImagerySafe"
         private const val OLD_FALLBACK_ESRI_SOURCE_NAME = "EsriWorldImageryFallbackV2"
-        private const val ADAPTIVE_ESRI_SOURCE_NAME = "EsriWorldImageryAdaptiveV4"
+        private const val OLD_ADAPTIVE_ESRI_SOURCE_NAME = "EsriWorldImageryAdaptiveV4"
+        private const val ADAPTIVE_ESRI_SOURCE_NAME = "EsriWorldImageryAdaptiveV5"
 
-        private const val DIRECT_TILE_MAX_ZOOM = 18
-        private const val MAX_SATELLITE_ZOOM = 23.0
+        private const val DIRECT_TILE_MAX_ZOOM = 17
+        private const val MAX_SATELLITE_ZOOM = 24.0
         private const val TILE_SIZE = 256
         private const val WEB_MERCATOR_HALF_WORLD = 20037508.342789244
 

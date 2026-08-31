@@ -1,6 +1,7 @@
 package com.nv.dronemapping
 
 import com.nv.dronemapping.ui.BottomNavigation
+import com.nv.dronemapping.ui.PhotoPointsOverlay
 import android.widget.LinearLayout
 import android.Manifest
 import android.content.Intent
@@ -70,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private val flightVertexMarkers = mutableListOf<Marker>()
     private val routeOverlays = mutableListOf<Polyline>()
     private val routeArrowMarkers = mutableListOf<Marker>()
+    private var photoPointsOverlay: PhotoPointsOverlay? = null
 
     private var referenceOverlay: Polygon? = null
     private var flightBoundaryOverlay: Polygon? = null
@@ -1240,6 +1242,12 @@ class MainActivity : AppCompatActivity() {
 
         routeOverlays.clear()
         routeArrowMarkers.clear()
+
+        photoPointsOverlay?.let {
+            binding.map.overlays.remove(it)
+        }
+        photoPointsOverlay = null
+
         clearRouteEndpointOverlays()
 
         /*
@@ -1336,6 +1344,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        photoPointsOverlay =
+            PhotoPointsOverlay(
+                plan.waypoints
+            ).also {
+                binding.map.overlays.add(it)
+            }
+
         redrawRouteEndpoints(
             plan
         )
@@ -1357,7 +1372,8 @@ class MainActivity : AppCompatActivity() {
         binding.map.invalidate()
 
         fitToPoints(
-            plan.boundary
+            plan.boundary +
+                listOfNotNull(preferredStart)
         )
     }
 
@@ -2739,6 +2755,9 @@ class MainActivity : AppCompatActivity() {
         routeArrowMarkers.forEach {
             it.isEnabled = showRouteLayer
         }
+
+        photoPointsOverlay?.isEnabled =
+            showRouteLayer
 
         preferredStartMarker?.isEnabled =
             showRouteLayer

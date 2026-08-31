@@ -9,7 +9,7 @@
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="0dp"
-        android:layout_height="50dp"
+        android:layout_height="44dp"
         android:background="@color/navy"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -24,7 +24,7 @@
             android:layout_weight="1"
             android:text="NV Drone Mapping"
             android:textColor="@color/white"
-            android:textSize="17sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
     </LinearLayout>
@@ -33,7 +33,7 @@
         android:id="@+id/mapContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@id/bottomNavigationContainer"
+        app:layout_constraintBottom_toTopOf="@id/panel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
@@ -44,58 +44,11 @@
             android:layout_height="match_parent" />
 
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:orientation="horizontal"
-            android:padding="7dp">
-
-            <Button
-                android:id="@+id/btnUndo"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="DESFAZER"
-                android:textSize="10sp" />
-
-            <Space
-                android:layout_width="5dp"
-                android:layout_height="1dp" />
-
-            <Button
-                android:id="@+id/btnClear"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="LIMPAR"
-                android:textSize="10sp" />
-
-            <Space
-                android:layout_width="5dp"
-                android:layout_height="1dp" />
-
-            <Button
-                android:id="@+id/btnImport"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="IMPORTAR REF"
-                android:textSize="9sp" />
-
-        </LinearLayout>
-
-        <LinearLayout
             android:id="@+id/mapControls"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_margin="10dp"
+            android:layout_margin="8dp"
             android:orientation="vertical"
             android:clipChildren="false"
             android:clipToPadding="false"
@@ -104,35 +57,34 @@
 
             <Button
                 android:id="@+id/btnMapType"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:layout_marginBottom="7dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginBottom="6dp"
                 android:backgroundTint="@color/navy"
                 android:minHeight="0dp"
                 android:minWidth="0dp"
                 android:padding="0dp"
                 android:text="SAT"
                 android:textColor="@color/white"
-                android:textSize="10sp" />
+                android:textSize="9sp" />
 
             <Button
                 android:id="@+id/btnFitBoundary"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:layout_marginBottom="7dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginBottom="6dp"
                 android:backgroundTint="@color/navy"
                 android:minHeight="0dp"
                 android:minWidth="0dp"
                 android:padding="0dp"
                 android:text="▣"
                 android:textColor="@color/white"
-                android:textSize="17sp" />
+                android:textSize="15sp" />
 
             <Button
                 android:id="@+id/btnMyLocation"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:layout_marginBottom="7dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:elevation="12dp"
                 android:translationZ="12dp"
                 android:backgroundTint="#1976D2"
@@ -141,7 +93,7 @@
                 android:padding="0dp"
                 android:text="⌾"
                 android:textColor="@color/white"
-                android:textSize="19sp" />
+                android:textSize="17sp" />
 
         </LinearLayout>
 
@@ -150,34 +102,28 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginHorizontal="58dp"
-            android:layout_marginBottom="9dp"
+            android:layout_marginHorizontal="54dp"
+            android:layout_marginBottom="8dp"
             android:background="#CC0D2137"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="6dp"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="5dp"
             android:text="Toque no mapa para desenhar o QUADRO DE VOO"
             android:textColor="@color/white"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
     </FrameLayout>
-
-    <FrameLayout
-        android:id="@+id/bottomNavigationContainer"
-        android:layout_width="0dp"
-        android:layout_height="60dp"
-        android:background="@color/white"
-        app:layout_constraintBottom_toTopOf="@id/panel"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
 
     <ScrollView
         android:id="@+id/panel"
         android:layout_width="0dp"
-        android:layout_height="350dp"
+        android:layout_height="wrap_content"
         android:background="@color/white"
-        android:fillViewport="true"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:elevation="10dp"
+        android:fillViewport="false"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavigationContainer"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHeight_max="230dp"
         app:layout_constraintStart_toStartOf="parent">
 
         <LinearLayout
@@ -185,295 +131,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="9dp">
+            android:paddingHorizontal="8dp"
+            android:paddingTop="7dp"
+            android:paddingBottom="6dp">
 
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Altura (m)">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inAltitude"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal"
-                        android:text="60"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Veloc. (m/s)">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inSpeed"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal"
-                        android:text="5"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Frontal (%)">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inFrontOverlap"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal"
-                        android:text="80"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Lateral (%)">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inSideOverlap"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal"
-                        android:text="70"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Direção (°)">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/inBearing"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="numberDecimal|numberSigned"
-                        android:text="0"
-                        android:textSize="12sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <CheckBox
-                    android:id="@+id/checkAutoBearing"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
-                    android:text="Direção auto"
-                    android:textSize="11sp" />
-
-                <CheckBox
-                    android:id="@+id/checkCrossHatch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Grade cruzada"
-                    android:textSize="11sp" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnPreset2d"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="2D AUTO"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnPreset3d"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="CRUZADO"
-                    android:textSize="10sp" />
-
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/txtBearingStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:gravity="center"
-                android:text="Linhas: direção automática"
-                android:textColor="@color/text_secondary"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnRotateLeft"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="0.8"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="-15°"
-                    android:textSize="11sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnGenerate"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1.7"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="APLICAR PLANO"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnRotateRight"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="0.8"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="+15°"
-                    android:textSize="11sp" />
-
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btnInvert"
-                android:layout_width="match_parent"
-                android:layout_height="36dp"
-                android:layout_marginTop="4dp"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="INVERTER"
-                android:textSize="10sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnStartPoint"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="INÍCIO"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnLayers"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="CAMADAS"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnTutorial"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="TUTORIAL"
-                    android:textSize="10sp" />
-
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btnAdvanced"
-                android:layout_width="match_parent"
-                android:layout_height="36dp"
-                android:layout_marginTop="5dp"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="AVANÇADO ▼"
-                android:textSize="10sp" />
-
-            <LinearLayout
-                android:id="@+id/advancedContainer"
+                android:id="@+id/panelProjects"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -482,14 +145,367 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnSaveProject"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="SALVAR"
+                        android:textSize="9sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnOpenProject"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="ABRIR"
+                        android:textSize="9sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnImport"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1.15"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="IMPORTAR REF"
+                        android:textSize="8.5sp" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnExport"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="EXPORTAR KMZ"
+                        android:textSize="8.5sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnPreviewKml"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="PRÉVIA KML"
+                        android:textSize="8.5sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnShare"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="COMPARTILHAR"
+                        android:textSize="8.5sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/panelFlight"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="Gimbal">
+                        android:hint="Altura (m)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inAltitude"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal"
+                            android:text="60"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Veloc. (m/s)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inSpeed"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal"
+                            android:text="5"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Direção (°)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inBearing"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal|numberSigned"
+                            android:text="0"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <CheckBox
+                        android:id="@+id/checkAutoBearing"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="Direção auto"
+                        android:textSize="10sp" />
+
+                    <CheckBox
+                        android:id="@+id/checkCrossHatch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Grade cruzada"
+                        android:textSize="10sp" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/txtBearingStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="Linhas: direção automática"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnRotateLeft"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="0.75"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="-15°"
+                        android:textSize="10sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnGenerate"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1.7"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="APLICAR PLANO"
+                        android:textSize="9sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnRotateRight"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="0.75"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="+15°"
+                        android:textSize="10sp" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnInvert"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="INVERTER"
+                        android:textSize="9sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnStartPoint"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="INÍCIO"
+                        android:textSize="9sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnPreset2d"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="2D AUTO"
+                        android:textSize="8.5sp" />
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <Button
+                        android:id="@+id/btnPreset3d"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="CRUZADO"
+                        android:textSize="8.5sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/panelPhoto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Frontal (%)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inFrontOverlap"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal"
+                            android:text="80"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Lateral (%)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inSideOverlap"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal"
+                            android:text="70"
+                            android:textSize="12sp" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <Space
+                        android:layout_width="5dp"
+                        android:layout_height="1dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Gimbal (°)">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inGimbal"
@@ -501,45 +517,154 @@
 
                     </com.google.android.material.textfield.TextInputLayout>
 
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/panelDji"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/btnDjiGuide"
+                    android:layout_width="match_parent"
+                    android:layout_height="38dp"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="GUIA DJI"
+                    android:textSize="9.5sp" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/panelAdvanced"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/btnAdvanced"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/advancedContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="Máx. pontos">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/inMaxWaypoints"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:text="190"
+                                android:textSize="12sp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <Space
+                            android:layout_width="5dp"
+                            android:layout_height="1dp" />
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="Código DJI">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/inDroneEnum"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:text="68"
+                                android:textSize="12sp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+
+                    <Button
+                        android:id="@+id/btnTutorial"
+                        android:layout_width="match_parent"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="5dp"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="TUTORIAL"
+                        android:textSize="9sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/panelArea"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnUndo"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="DESFAZER"
+                        android:textSize="9sp" />
+
                     <Space
                         android:layout_width="5dp"
                         android:layout_height="1dp" />
 
-                    <com.google.android.material.textfield.TextInputLayout
+                    <Button
+                        android:id="@+id/btnClear"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="38dp"
                         android:layout_weight="1"
-                        android:hint="Máx. pts">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inMaxWaypoints"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="number"
-                            android:text="190"
-                            android:textSize="12sp" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="LIMPAR"
+                        android:textSize="9sp" />
 
                     <Space
                         android:layout_width="5dp"
                         android:layout_height="1dp" />
 
-                    <com.google.android.material.textfield.TextInputLayout
+                    <Button
+                        android:id="@+id/btnLayers"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="38dp"
                         android:layout_weight="1"
-                        android:hint="Cód. DJI">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inDroneEnum"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="number"
-                            android:text="68"
-                            android:textSize="12sp" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="CAMADAS"
+                        android:textSize="9sp" />
 
                 </LinearLayout>
 
@@ -551,104 +676,23 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="5dp"
                 android:background="#EEF3F8"
-                android:padding="7dp"
+                android:padding="6dp"
                 android:text="Área: -- | GSD: -- | Fotos: -- | Tempo: --"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnExport"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:enabled="false"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="EXPORTAR KMZ"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnPreviewKml"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:enabled="false"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="PRÉVIA KML"
-                    android:textSize="10sp" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnDjiGuide"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="GUIA DJI"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnSaveProject"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="SALVAR"
-                    android:textSize="10sp" />
-
-                <Space
-                    android:layout_width="5dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnOpenProject"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:minWidth="0dp"
-                    android:text="PROJETOS"
-                    android:textSize="10sp" />
-
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btnShare"
-                android:layout_width="match_parent"
-                android:layout_height="36dp"
-                android:layout_marginTop="5dp"
-                android:enabled="false"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="COMPARTILHAR"
-                android:textSize="10sp" />
+                android:textSize="10sp"
+                android:visibility="gone" />
 
         </LinearLayout>
 
     </ScrollView>
+
+    <FrameLayout
+        android:id="@+id/bottomNavigationContainer"
+        android:layout_width="0dp"
+        android:layout_height="50dp"
+        android:background="@color/navy"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

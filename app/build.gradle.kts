@@ -3,6 +3,19 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val signingStoreFile = System.getenv("NV_SIGNING_STORE_FILE")
+val signingStorePassword = System.getenv("NV_SIGNING_STORE_PASSWORD")
+val signingKeyAlias = System.getenv("NV_SIGNING_KEY_ALIAS")
+val signingKeyPassword = System.getenv("NV_SIGNING_KEY_PASSWORD")
+val ciVersionCode = System.getenv("NV_VERSION_CODE")?.toIntOrNull()
+val ciVersionName = System.getenv("NV_VERSION_NAME")
+
+val hasReleaseSigning =
+    !signingStoreFile.isNullOrBlank() &&
+        !signingStorePassword.isNullOrBlank() &&
+        !signingKeyAlias.isNullOrBlank() &&
+        !signingKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.nv.dronemapping"
     compileSdk = 36
@@ -11,10 +24,30 @@ android {
         applicationId = "com.nv.dronemapping"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("nvRelease") {
+            if (hasReleaseSigning) {
+                storeFile = file(signingStoreFile!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("nvRelease")
+            }
+            isMinifyEnabled = false
+        }
     }
 
     buildFeatures {

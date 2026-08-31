@@ -1,6 +1,5 @@
 name: Build Android APK
 
-# CI verification after fixing activity_main.xml
 on:
   workflow_dispatch:
   push:
@@ -10,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      NV_KEYSTORE_BASE64: ${{ secrets.NV_SIGNING_KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout
@@ -35,14 +37,45 @@ jobs:
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Prepare fixed signing key
+        if: github.event_name != 'pull_request' && env.NV_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          printf '%s' "$NV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nv-mapping-release.jks"
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/NV-Mapping.apk
+      - name: Build signed release APK
+        if: github.event_name != 'pull_request' && env.NV_KEYSTORE_BASE64 != ''
+        env:
+          NV_SIGNING_STORE_FILE: ${{ runner.temp }}/nv-mapping-release.jks
+          NV_SIGNING_STORE_PASSWORD: ${{ secrets.NV_SIGNING_STORE_PASSWORD }}
+          NV_SIGNING_KEY_ALIAS: ${{ secrets.NV_SIGNING_KEY_ALIAS }}
+          NV_SIGNING_KEY_PASSWORD: ${{ secrets.NV_SIGNING_KEY_PASSWORD }}
+          NV_VERSION_CODE: ${{ github.run_number }}
+          NV_VERSION_NAME: 1.0.${{ github.run_number }}
+        run: gradle :app:assembleRelease --stacktrace
 
-      - name: Upload APK
+      - name: Rename signed APK
+        if: github.event_name != 'pull_request' && env.NV_KEYSTORE_BASE64 != ''
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/NV-Mapping.apk
+
+      - name: Upload signed APK
+        if: github.event_name != 'pull_request' && env.NV_KEYSTORE_BASE64 != ''
         uses: actions/upload-artifact@v4
         with:
           name: NV-Mapping
-          path: app/build/outputs/apk/debug/NV-Mapping.apk
+          path: app/build/outputs/apk/release/NV-Mapping.apk
+
+      - name: Build debug APK for validation
+        if: github.event_name == 'pull_request' || env.NV_KEYSTORE_BASE64 == ''
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Rename validation APK
+        if: github.event_name == 'pull_request' || env.NV_KEYSTORE_BASE64 == ''
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/NV-Mapping-debug.apk
+
+      - name: Upload validation APK
+        if: github.event_name == 'pull_request' || env.NV_KEYSTORE_BASE64 == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: NV-Mapping-debug
+          path: app/build/outputs/apk/debug/NV-Mapping-debug.apk

@@ -9,23 +9,19 @@ import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
+import java.util.Locale
+import kotlin.math.pow
 
 /**
- * Correção isolada para o mapa de satélite.
+ * Política isolada do mapa de satélite.
  *
- * O Esri World Imagery pode devolver a própria imagem "Map data not yet available"
- * em níveis de zoom onde a região não possui tile real. O osmdroid já possui um
- * MapTileApproximater capaz de ampliar um tile válido de um nível anterior.
+ * Até o zoom 18 usamos os tiles normais do Esri World Imagery, que são rápidos.
+ * Nos níveis mais próximos usamos o endpoint /export do mesmo MapServer. O export
+ * renderiza a melhor imagem disponível para o bbox solicitado e evita depender de
+ * um tile nativo de alta resolução que pode ser a imagem "Map data not yet available".
  *
- * A fonte online atende somente até um nível confiável (18), enquanto o MapView
- * continua permitindo aproximação visual até 23. Ao ativar SAT já muito aproximado,
- * o mapa volta uma vez ao nível 18 para garantir que o tile pai real seja carregado.
- * Depois disso o usuário pode aproximar novamente e o osmdroid amplia o tile válido,
- * sem pedir ao servidor os níveis inexistentes.
- *
- * Um nome de fonte novo evita reutilizar tiles inválidos das tentativas anteriores.
- *
- * Não altera planejamento, rota, fotos, projetos ou exportação.
+ * O nome da fonte é novo para não reutilizar o cache das tentativas anteriores.
+ * Nenhuma regra de missão, rota, fotos, projetos ou exportação do NV Mapping é alterada.
  */
 class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCallbacks {
 
@@ -38,72 +34,100 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
         if (activity !is MainActivity) return
 
         activity.window.decorView.post {
-            installSatelliteZoomFix(activity)
+            installSatellitePolicy(activity)
         }
     }
 
-    private fun installSatelliteZoomFix(activity: MainActivity) {
+    private fun installSatellitePolicy(activity: MainActivity) {
         val map = activity.findViewById<MapView>(R.id.map) ?: return
         val mapTypeButton = activity.findViewById<View>(R.id.btnMapType) ?: return
 
         mapTypeButton.setOnTouchListener { _, event ->
             if (event.actionMasked == MotionEvent.ACTION_UP) {
+                // O click normal do MainActivity troca MAP/SAT. Este post roda logo
+                // depois e substitui somente a fonte SAT pela versão adaptativa.
                 map.post {
-                    applySatelliteZoomPolicy(map)
+                    applySatellitePolicy(map)
                 }
             }
             false
         }
     }
 
-    private fun applySatelliteZoomPolicy(map: MapView) {
+    private fun applySatellitePolicy(map: MapView) {
         val currentSource = map.tileProvider.tileSource ?: return
         val sourceName = currentSource.name()
 
         if (
             sourceName == ESRI_SOURCE_NAME ||
             sourceName == OLD_SAFE_ESRI_SOURCE_NAME ||
-            sourceName == FALLBACK_ESRI_SOURCE_NAME
+            sourceName == OLD_FALLBACK_ESRI_SOURCE_NAME ||
+            sourceName == ADAPTIVE_ESRI_SOURCE_NAME
         ) {
             val center = GeoPoint(
                 map.mapCenter.latitude,
                 map.mapCenter.longitude
             )
-            val requestedZoom = map.zoomLevelDouble.coerceAtMost(VISUAL_MAX_ZOOM)
+            val zoom = map.zoomLevelDouble.coerceAtMost(MAX_SATELLITE_ZOOM)
 
-            // O downloader da fonte online para no nível 18. Acima disso, o
-            // MapTileApproximater do provider padrão do osmdroid amplia um tile pai.
-            map.setTileSource(fallbackEsriTileSource)
-            map.setMaxZoomLevel(VISUAL_MAX_ZOOM)
-
-            // Se SAT foi ativado em um zoom maior, primeiro garante um tile real no
-            // nível 18. Depois o usuário pode continuar aproximando normalmente.
-            val initialSatelliteZoom =
-                requestedZoom.coerceAtMost(RELIABLE_ESRI_ZOOM.toDouble())
-
+            map.setTileSource(adaptiveEsriTileSource)
+            map.setMaxZoomLevel(MAX_SATELLITE_ZOOM)
             map.controller.setCenter(center)
-            map.controller.setZoom(initialSatelliteZoom)
+            map.controller.setZoom(zoom)
             map.invalidate()
         } else {
-            // Ao voltar para o mapa normal, remove a regra especial do SAT.
+            // Ao voltar ao mapa normal, deixa o próprio tile source definir o limite.
             map.setMaxZoomLevel(null)
         }
     }
 
-    private val fallbackEsriTileSource by lazy {
+    private val adaptiveEsriTileSource by lazy {
         object : OnlineTileSourceBase(
-            FALLBACK_ESRI_SOURCE_NAME,
+            ADAPTIVE_ESRI_SOURCE_NAME,
             0,
-            RELIABLE_ESRI_ZOOM,
-            256,
+            MAX_SATELLITE_ZOOM.toInt(),
+            TILE_SIZE,
             ".jpg",
-            arrayOf(ESRI_BASE_URL)
+            arrayOf(ESRI_SERVICE_ROOT)
         ) {
             override fun getTileURLString(pMapTileIndex: Long): String {
                 val z = MapTileIndex.getZoom(pMapTileIndex)
                 val x = MapTileIndex.getX(pMapTileIndex)
                 val y = MapTileIndex.getY(pMapTileIndex)
-                return "${getBaseUrl()}$z/$y/$x$mImageFilenameEnding"
+
+                if (z <= DIRECT_TILE_MAX_ZOOM) {
+                    return "${getBaseUrl()}tile/$z/$y/$x"
+                }
+
+                val n = 2.0.pow(z.toDouble())
+                val tileSpan = (2.0 * WEB_MERCATOR_HALF_WORLD) / n
+
+                val minX = -WEB_MERCATOR_HALF_WORLD + x.toDouble() * tileSpan
+                val maxX = minX + tileSpan
+                val maxY = WEB_MERCATOR_HALF_WORLD - y.toDouble() * tileSpan
+                val minY = maxY - tileSpan
+
+                val bbox = String.format(
+                    Locale.US,
+                    "%.8f,%.8f,%.8f,%.8f",
+                    minX,
+                    minY,
+                    maxX,
+                    maxY
+                )
+
+                return buildString {
+                    append(getBaseUrl())
+                    append("export?bbox=")
+                    append(bbox)
+                    append("&bboxSR=3857")
+                    append("&imageSR=3857")
+                    append("&size=256,256")
+                    append("&format=jpg")
+                    append("&transparent=false")
+                    append("&dpi=96")
+                    append("&f=image")
+                }
             }
         }
     }
@@ -118,10 +142,15 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
     companion object {
         private const val ESRI_SOURCE_NAME = "EsriWorldImagery"
         private const val OLD_SAFE_ESRI_SOURCE_NAME = "EsriWorldImagerySafe"
-        private const val FALLBACK_ESRI_SOURCE_NAME = "EsriWorldImageryFallbackV2"
-        private const val RELIABLE_ESRI_ZOOM = 18
-        private const val VISUAL_MAX_ZOOM = 23.0
-        private const val ESRI_BASE_URL =
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"
+        private const val OLD_FALLBACK_ESRI_SOURCE_NAME = "EsriWorldImageryFallbackV2"
+        private const val ADAPTIVE_ESRI_SOURCE_NAME = "EsriWorldImageryAdaptiveV4"
+
+        private const val DIRECT_TILE_MAX_ZOOM = 18
+        private const val MAX_SATELLITE_ZOOM = 23.0
+        private const val TILE_SIZE = 256
+        private const val WEB_MERCATOR_HALF_WORLD = 20037508.342789244
+
+        private const val ESRI_SERVICE_ROOT =
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/"
     }
 }

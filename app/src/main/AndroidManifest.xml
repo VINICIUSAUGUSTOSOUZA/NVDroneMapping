@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
+        android:name=".NvDroneMappingApplication"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:label="NV Drone Mapping"

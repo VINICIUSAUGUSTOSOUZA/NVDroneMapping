@@ -2287,6 +2287,11 @@ class MainActivity : AppCompatActivity() {
         routeOverlays.clear()
         routeArrowMarkers.clear()
 
+        photoPointsOverlay?.let {
+            binding.map.overlays.remove(it)
+        }
+        photoPointsOverlay = null
+
         clearRouteEndpointOverlays()
 
         binding.map.invalidate()

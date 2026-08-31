@@ -17,13 +17,13 @@ import org.osmdroid.views.MapView
  * em níveis de zoom onde a região não possui tile real. O osmdroid já possui um
  * MapTileApproximater capaz de ampliar um tile válido de um nível anterior.
  *
- * A política abaixo deixa a fonte online servir apenas até um nível confiável,
- * mas mantém o MapView apto a aproximar mais. Assim, acima do limite real da
- * fonte, o osmdroid usa a aproximação do tile pai em vez de pedir um tile cinza
- * ao servidor.
+ * A fonte online atende somente até um nível confiável (18), enquanto o MapView
+ * continua permitindo aproximação visual até 23. Ao ativar SAT já muito aproximado,
+ * o mapa volta uma vez ao nível 18 para garantir que o tile pai real seja carregado.
+ * Depois disso o usuário pode aproximar novamente e o osmdroid amplia o tile válido,
+ * sem pedir ao servidor os níveis inexistentes.
  *
- * Um nome de fonte novo é usado para não reutilizar tiles inválidos que possam
- * ter ficado gravados no cache das tentativas anteriores.
+ * Um nome de fonte novo evita reutilizar tiles inválidos das tentativas anteriores.
  *
  * Não altera planejamento, rota, fotos, projetos ou exportação.
  */
@@ -69,17 +69,20 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
                 map.mapCenter.latitude,
                 map.mapCenter.longitude
             )
-            val zoom = map.zoomLevelDouble.coerceAtMost(VISUAL_MAX_ZOOM)
+            val requestedZoom = map.zoomLevelDouble.coerceAtMost(VISUAL_MAX_ZOOM)
 
-            // A fonte online para no nível 18. Acima disso, o downloader deixa de
-            // atender a requisição e o MapTileApproximater do provider padrão do
-            // osmdroid amplia o melhor tile inferior existente no cache.
+            // O downloader da fonte online para no nível 18. Acima disso, o
+            // MapTileApproximater do provider padrão do osmdroid amplia um tile pai.
             map.setTileSource(fallbackEsriTileSource)
             map.setMaxZoomLevel(VISUAL_MAX_ZOOM)
 
-            // Mantém o nível visual solicitado pelo usuário em vez de reduzi-lo a 18.
+            // Se SAT foi ativado em um zoom maior, primeiro garante um tile real no
+            // nível 18. Depois o usuário pode continuar aproximando normalmente.
+            val initialSatelliteZoom =
+                requestedZoom.coerceAtMost(RELIABLE_ESRI_ZOOM.toDouble())
+
             map.controller.setCenter(center)
-            map.controller.setZoom(zoom)
+            map.controller.setZoom(initialSatelliteZoom)
             map.invalidate()
         } else {
             // Ao voltar para o mapa normal, remove a regra especial do SAT.

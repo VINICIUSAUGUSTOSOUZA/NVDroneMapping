@@ -12,6 +12,8 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.constraintlayout.widget.ConstraintSet
 import com.nv.dronemapping.R
 
 class BottomNavigation(
@@ -21,10 +23,10 @@ class BottomNavigation(
     private val onCapture: () -> Unit,
     private val onDJI: () -> Unit,
     private val onAdvanced: () -> Unit,
-    private val onArea: () -> Unit
+    @Suppress("UNUSED_PARAMETER") private val onArea: () -> Unit
 ) : LinearLayout(context) {
 
-    private val selectedColor = Color.rgb(33, 150, 243)
+    private val selectedColor = Color.rgb(25, 118, 210)
     private val normalColor = Color.WHITE
     private val barColor = Color.rgb(13, 33, 55)
 
@@ -37,15 +39,19 @@ class BottomNavigation(
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER
-        setPadding(dp(4), dp(4), dp(4), dp(4))
+        setPadding(dp(5), dp(4), dp(5), dp(4))
+        elevation = dp(14).toFloat()
 
         background = GradientDrawable().apply {
             setColor(barColor)
+            cornerRadius = dp(14).toFloat()
         }
 
+        configureContextualLayout()
         restoreMapQuickActions()
 
         addItem(
+            icon = "📁",
             label = "Projetos",
             containerId = R.id.panelProjects,
             invokeLegacyAction = false,
@@ -53,6 +59,7 @@ class BottomNavigation(
             action = onProject
         )
         addItem(
+            icon = "✈",
             label = "Voo",
             containerId = R.id.panelFlight,
             invokeLegacyAction = true,
@@ -60,6 +67,7 @@ class BottomNavigation(
             action = onFlight
         )
         addItem(
+            icon = "📷",
             label = "Foto",
             containerId = R.id.panelPhoto,
             invokeLegacyAction = true,
@@ -67,6 +75,7 @@ class BottomNavigation(
             action = onCapture
         )
         addItem(
+            icon = "🚁",
             label = "DJI",
             containerId = R.id.panelDji,
             invokeLegacyAction = false,
@@ -74,6 +83,7 @@ class BottomNavigation(
             action = onDJI
         )
         addItem(
+            icon = "⚙",
             label = "Avançado",
             containerId = R.id.panelAdvanced,
             invokeLegacyAction = false,
@@ -84,9 +94,73 @@ class BottomNavigation(
     }
 
     /**
-     * Reaproveita os mesmos botões e os mesmos IDs/listeners já existentes.
-     * Apenas devolve DESFAZER / LIMPAR / IMPORTAR REF ao topo do mapa e
-     * mantém CAMADAS acessível em Avançado após a remoção visual da aba Área.
+     * O mapa fica acima da barra. Quando uma categoria abre, o painel nasce
+     * ABAIXO da barra e usa somente a altura do conteúdo daquela categoria.
+     * Com o painel fechado, a barra permanece alguns dp acima da borda para
+     * ganhar aspecto de barra flutuante e deixar a interface mais leve.
+     */
+    private fun configureContextualLayout() {
+        val activity = host ?: return
+        val mapContainer = activity.findViewById<FrameLayout>(R.id.mapContainer) ?: return
+        val panel = activity.findViewById<View>(R.id.panel) ?: return
+        val navContainer = activity.findViewById<FrameLayout>(R.id.bottomNavigationContainer) ?: return
+        val root = mapContainer.parent as? ConstraintLayout ?: return
+
+        navContainer.setBackgroundColor(Color.TRANSPARENT)
+        navContainer.elevation = dp(16).toFloat()
+        navContainer.clipChildren = false
+        navContainer.clipToPadding = false
+
+        (navContainer.layoutParams as? ConstraintLayout.LayoutParams)?.let { params ->
+            params.height = dp(58)
+            navContainer.layoutParams = params
+        }
+
+        panel.background = GradientDrawable().apply {
+            setColor(Color.WHITE)
+            cornerRadius = dp(14).toFloat()
+        }
+        panel.elevation = dp(12).toFloat()
+
+        val set = ConstraintSet()
+        set.clone(root)
+
+        set.clear(panel.id, ConstraintSet.BOTTOM)
+        set.connect(
+            panel.id,
+            ConstraintSet.BOTTOM,
+            ConstraintSet.PARENT_ID,
+            ConstraintSet.BOTTOM
+        )
+        set.setMargin(panel.id, ConstraintSet.START, dp(8))
+        set.setMargin(panel.id, ConstraintSet.END, dp(8))
+        set.setMargin(panel.id, ConstraintSet.BOTTOM, dp(6))
+
+        set.clear(navContainer.id, ConstraintSet.BOTTOM)
+        set.connect(
+            navContainer.id,
+            ConstraintSet.BOTTOM,
+            panel.id,
+            ConstraintSet.TOP
+        )
+        set.setMargin(navContainer.id, ConstraintSet.START, dp(8))
+        set.setMargin(navContainer.id, ConstraintSet.END, dp(8))
+        set.setMargin(navContainer.id, ConstraintSet.BOTTOM, dp(7))
+
+        set.clear(mapContainer.id, ConstraintSet.BOTTOM)
+        set.connect(
+            mapContainer.id,
+            ConstraintSet.BOTTOM,
+            navContainer.id,
+            ConstraintSet.TOP
+        )
+
+        set.applyTo(root)
+    }
+
+    /**
+     * Reaproveita os mesmos botões e listeners existentes.
+     * DESFAZER / LIMPAR / IMPORTAR REF continuam fixos no topo do mapa.
      */
     private fun restoreMapQuickActions() {
         val activity = host ?: return
@@ -142,6 +216,7 @@ class BottomNavigation(
     }
 
     private fun addItem(
+        icon: String,
         label: String,
         containerId: Int,
         invokeLegacyAction: Boolean,
@@ -152,13 +227,15 @@ class BottomNavigation(
         val index = items.size
 
         val item = TextView(context).apply {
-            text = label
-            textSize = 10.5f
+            text = "$icon\n$label"
+            textSize = 9.5f
             gravity = Gravity.CENTER
             setTextColor(normalColor)
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(2), 0, dp(2), 0)
-            minHeight = dp(42)
+            includeFontPadding = false
+            setLineSpacing(0f, 0.92f)
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+            minHeight = dp(50)
             background = itemBackground(false)
 
             setOnClickListener {
@@ -188,7 +265,10 @@ class BottomNavigation(
                 0,
                 LayoutParams.MATCH_PARENT,
                 1f
-            )
+            ).apply {
+                marginStart = dp(1)
+                marginEnd = dp(1)
+            }
         )
     }
 
@@ -254,15 +334,16 @@ class BottomNavigation(
     private fun refreshSelection() {
         items.forEachIndexed { index, item ->
             val selected = index == selectedIndex
-            item.setTextColor(if (selected) Color.WHITE else normalColor)
+            item.setTextColor(Color.WHITE)
             item.background = itemBackground(selected)
+            item.alpha = if (selected) 1f else 0.92f
         }
     }
 
     private fun itemBackground(selected: Boolean): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(8).toFloat()
+            cornerRadius = dp(11).toFloat()
             setColor(
                 if (selected) selectedColor
                 else Color.TRANSPARENT

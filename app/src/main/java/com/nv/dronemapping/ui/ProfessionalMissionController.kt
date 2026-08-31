@@ -1,5 +1,6 @@
 package com.nv.dronemapping.ui
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -46,7 +47,7 @@ class ProfessionalMissionController(
     private val activity: MainActivity
 ) {
 
-    private val prefs = activity.getSharedPreferences(PREFS_NAME, MainActivity.MODE_PRIVATE)
+    private val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val professionalOverlays = mutableListOf<Overlay>()
 
     private var missionSummary: TextView? = null

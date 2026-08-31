@@ -1,5 +1,6 @@
 package com.nv.dronemapping.ui
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -29,7 +30,6 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
-import kotlin.math.ceil
 
 /**
  * Camada aditiva do planejamento inteligente.
@@ -42,7 +42,7 @@ class SmartPlanningController(
     private val activity: MainActivity
 ) {
 
-    private val prefs = activity.getSharedPreferences(PREFS_NAME, MainActivity.MODE_PRIVATE)
+    private val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private var options = loadOptions()
     private var lastBatteryPlan: SmartMissionPlanner.BatteryPlan? = null
     private val batteryOverlays = mutableListOf<Overlay>()
@@ -341,8 +341,8 @@ class SmartPlanningController(
             arrayOf(updated.stats.effectiveBearingDeg)
         )
 
-        appendSmartStats(updated, batteryPlan)
-        drawBatteryOverlays(updated, batteryPlan, home)
+        appendSmartStats(batteryPlan)
+        drawBatteryOverlays(batteryPlan, home)
 
         activity.findViewById<TextView>(R.id.txtHint)?.text =
             if (batteryPlan.batteryCount > 1) {
@@ -353,7 +353,6 @@ class SmartPlanningController(
     }
 
     private fun appendSmartStats(
-        plan: MissionPlan,
         batteryPlan: SmartMissionPlanner.BatteryPlan
     ) {
         val stats = activity.findViewById<TextView>(R.id.txtStats) ?: return
@@ -379,7 +378,6 @@ class SmartPlanningController(
     }
 
     private fun drawBatteryOverlays(
-        plan: MissionPlan,
         batteryPlan: SmartMissionPlanner.BatteryPlan,
         home: LatLng?
     ) {

@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import com.nv.dronemapping.ui.SmartPlanningController
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
@@ -35,6 +36,7 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
 
         activity.window.decorView.post {
             installSatellitePolicy(activity)
+            SmartPlanningController(activity).install()
         }
     }
 

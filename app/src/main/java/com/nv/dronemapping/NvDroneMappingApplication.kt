@@ -11,15 +11,14 @@ import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 
 /**
- * Isolated map compatibility fix.
+ * Correção isolada para o mapa de satélite.
  *
- * Esri World Imagery can return a JPEG saying "Map data not yet available"
- * when a location has no imagery for the closest LODs. For field work it is
- * better to keep the last reliable imagery visible and allow osmdroid to
- * over-zoom/rescale it than to display those placeholder tiles.
+ * O Esri World Imagery pode retornar a própria imagem "Map data not yet available"
+ * quando o usuário ultrapassa o nível de detalhe realmente disponível para a região.
+ * Em vez de permitir esse estado inválido, o NV Mapping limita o modo SAT ao último
+ * nível confiável e restaura o limite normal ao voltar para MAP.
  *
- * This class does not change mission planning, routes, photo triggers,
- * projects or exports.
+ * Não altera planejamento, rota, fotos, projetos ou exportação.
  */
 class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCallbacks {
 
@@ -42,8 +41,6 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
 
         mapTypeButton.setOnTouchListener { _, event ->
             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                // MainActivity handles the normal click first; this runs just after it
-                // and only adjusts the satellite tile behavior.
                 map.post {
                     applySatelliteZoomPolicy(map)
                 }
@@ -56,25 +53,25 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
         val currentSource = map.tileProvider.tileSource ?: return
         val sourceName = currentSource.name()
 
-        if (sourceName == ESRI_SOURCE_NAME) {
+        if (sourceName == ESRI_SOURCE_NAME || sourceName == SAFE_ESRI_SOURCE_NAME) {
             val center = GeoPoint(
                 map.mapCenter.latitude,
                 map.mapCenter.longitude
             )
 
-            // Keep the map capable of close visual zoom, but stop network tile
-            // requests at the reliable imagery level. osmdroid then enlarges the
-            // cached parent tiles instead of showing Esri's no-data JPEG.
-            map.setMaxZoomLevel(VISUAL_MAX_ZOOM)
+            // Regra robusta: SAT não pode pedir tiles acima do nível que usamos
+            // como confiável. Isso impede o mosaico "Map data not yet available".
             map.setTileSource(safeEsriTileSource)
+            map.setMaxZoomLevel(RELIABLE_ESRI_ZOOM.toDouble())
 
-            if (map.zoomLevelDouble > RELIABLE_ESRI_ZOOM) {
-                map.controller.setZoom(RELIABLE_ESRI_ZOOM.toDouble())
-            }
+            val targetZoom =
+                map.zoomLevelDouble.coerceAtMost(RELIABLE_ESRI_ZOOM.toDouble())
+
             map.controller.setCenter(center)
+            map.controller.setZoom(targetZoom)
             map.invalidate()
-        } else if (sourceName != SAFE_ESRI_SOURCE_NAME) {
-            // Restore the tile provider's own normal limit when leaving SAT mode.
+        } else {
+            // Ao voltar ao mapa normal, remove o limite específico do satélite.
             map.setMaxZoomLevel(null)
         }
     }
@@ -108,7 +105,6 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
         private const val ESRI_SOURCE_NAME = "EsriWorldImagery"
         private const val SAFE_ESRI_SOURCE_NAME = "EsriWorldImagerySafe"
         private const val RELIABLE_ESRI_ZOOM = 18
-        private const val VISUAL_MAX_ZOOM = 23.0
         private const val ESRI_BASE_URL =
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"
     }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NV Drone Mapping — Simulação</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#eef1f4;color:#17202a}.app{max-width:1100px;margin:auto;min-height:100vh;background:#fff;display:flex;flex-direction:column}.top{padding:14px 18px;border-bottom:1px solid #ddd;font-weight:700}.map{height:58vh;min-height:360px;background:linear-gradient(0deg,#dfe8d7,#edf2e9);position:relative;overflow:hidden}.map:before,.map:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(25deg,transparent 0 45px,#c9d5c3 46px 48px);opacity:.65}.map:after{background:repeating-linear-gradient(115deg,transparent 0 70px,#c9d5c3 71px 73px);opacity:.35}.grid{position:absolute;inset:8% 12%;border:2px dashed #247a3b;transform:rotate(-8deg);z-index:2}.grid span{position:absolute;inset:48% 0;border-top:2px solid #247a3b}.drone{position:absolute;left:48%;top:44%;font-size:36px;z-index:3}.panel{position:absolute;z-index:4;left:14px;top:14px;width:280px;background:#fff;border-radius:12px;box-shadow:0 4px 18px #0002;padding:12px}.block{border:1px solid #ddd;border-radius:10px;margin:7px 0;overflow:hidden}.head{padding:12px;font-weight:700;cursor:pointer}.body{padding:10px 12px;border-top:1px solid #eee;display:none;font-size:14px}.block.open .body{display:block}.bottom{display:flex;gap:4px;padding:8px;border-top:1px solid #ddd;background:#fff;overflow:auto}.bottom button{flex:1;min-width:90px;border:0;background:#f1f3f5;border-radius:9px;padding:11px 7px;cursor:pointer}.bottom button.active{background:#17202a;color:#fff}.status{padding:8px 14px;font-size:13px;background:#f7f7f7;border-top:1px solid #eee}.field{margin:8px 0}.field input,.field select{width:100%;padding:8px}.primary{width:100%;padding:10px;border:0;border-radius:8px;background:#17202a;color:#fff;cursor:pointer;margin-top:8px}
+</style></head>
+<body><main class="app"><div class="top">🚁 NV Drone Mapping — Simulação</div><section class="map"><div class="grid"><span></span></div><div class="drone">🚁</div><div class="panel" id="panel"></div></section><div class="status" id="status">Pronto para planejamento.</div><nav class="bottom" id="nav"></nav></main>
+<script>
+const data={
+'📁 Projeto':['Novo projeto','Abrir projeto','Salvar projeto'],
+'🗺 Área':['Definir área','Importar KML/KMZ','Pontos e limites'],
+'✈️ Voo':['Altitude','Sobreposição frontal','Sobreposição lateral','Direção das linhas'],
+'📷 Captura':['Câmera','Intervalo de fotos','Configurações de captura'],
+'🚁 DJI':['Modelo do drone','Exportação DJI/KMZ'],
+'⚙️ Avançado':['Direção: AUTO / Manual','Ajustes técnicos']};
+const panel=document.getElementById('panel'),nav=document.getElementById('nav'),status=document.getElementById('status');
+Object.keys(data).forEach((name,i)=>{const b=document.createElement('button');b.textContent=name;b.onclick=()=>openBlock(name,b);nav.appendChild(b)});
+function openBlock(name,btn){document.querySelectorAll('.bottom button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');panel.innerHTML='';const block=document.createElement('div');block.className='block open';const h=document.createElement('div');h.className='head';h.textContent=name;h.onclick=()=>block.classList.toggle('open');block.appendChild(h);const body=document.createElement('div');body.className='body';data[name].forEach(x=>{const row=document.createElement('div');row.className='field';row.textContent=x;if(x.includes('Direção')){const s=document.createElement('select');['AUTO','Manual'].forEach(v=>{const o=document.createElement('option');o.textContent=v;s.appendChild(o)});row.appendChild(s)}else if(x==='Altitude'){const inp=document.createElement('input');inp.type='number';inp.value=100;row.appendChild(inp)}body.appendChild(row)});const go=document.createElement('button');go.className='primary';go.textContent='Aplicar';go.onclick=()=>status.textContent=name+' aplicado. Simulação atualizada.';body.appendChild(go);block.appendChild(body);panel.appendChild(block);status.textContent=name+' aberto.'}
+openBlock('🗺 Área',nav.children[1]);
+</script></body></html>

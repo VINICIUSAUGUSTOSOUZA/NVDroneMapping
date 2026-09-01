@@ -5,6 +5,7 @@ import com.nv.dronemapping.geometry.GridPlanner
 import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -41,8 +42,51 @@ class CorePlannerTest {
     }
 
     @Test
-    fun exportedKmzContainsDjiStructureAndAutomaticPhotoActions() {
+    fun exportedKmzMatchesNativeDjiFlyMini5Structure() {
         val plan = GridPlanner.plan(rect(-26.1, -48.62, 120.0, 80.0), MissionSettings())
+        val entries = exportEntries(plan)
+
+        assertEquals(setOf("wpmz/template.kml", "wpmz/waylines.wpml"), entries.keys)
+        val dbf = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+        entries.values.forEach { dbf.newDocumentBuilder().parse(ByteArrayInputStream(it)) }
+
+        val template = entries.getValue("wpmz/template.kml").toString(Charsets.UTF_8)
+        val waylines = entries.getValue("wpmz/waylines.wpml").toString(Charsets.UTF_8)
+
+        // Native Mini 5 Pro DJI Fly template.kml contains only metadata + missionConfig.
+        assertFalse(template.contains("<Folder>"))
+        assertTrue(template.contains("<wpml:droneEnumValue>68</wpml:droneEnumValue>"))
+
+        val actions = Regex("<wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>").findAll(waylines).count()
+        assertEquals(plan.parts[0].size, actions)
+
+        assertTrue(waylines.contains("toPointAndStopWithContinuityCurvature"))
+        assertTrue(waylines.contains("<wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>"))
+        assertTrue(waylines.contains("<wpml:useStraightLine>0</wpml:useStraightLine>"))
+        assertFalse(waylines.contains("toPointAndStopWithDiscontinuityCurvature"))
+    }
+
+    @Test
+    fun changedAltitudeIsWrittenToEveryWaypoint() {
+        val altitude = 83.0
+        val plan = GridPlanner.plan(
+            rect(-26.1, -48.62, 120.0, 80.0),
+            MissionSettings(altitudeM = altitude)
+        )
+        val entries = exportEntries(plan)
+        val waylines = entries.getValue("wpmz/waylines.wpml").toString(Charsets.UTF_8)
+
+        val heights = Regex("<wpml:executeHeight>([^<]+)</wpml:executeHeight>")
+            .findAll(waylines)
+            .map { it.groupValues[1] }
+            .toList()
+
+        assertEquals(plan.parts[0].size, heights.size)
+        assertTrue(heights.all { it == "83.0" })
+        assertFalse(waylines.contains("<wpml:executeHeight>60.0</wpml:executeHeight>"))
+    }
+
+    private fun exportEntries(plan: com.nv.dronemapping.model.MissionPlan): LinkedHashMap<String, ByteArray> {
         val out = ByteArrayOutputStream()
         KmzExporter.writeKmz(plan, 0, "Unit Test", out)
 
@@ -55,14 +99,6 @@ class CorePlannerTest {
                 entry = zip.nextEntry
             }
         }
-
-        assertEquals(setOf("wpmz/template.kml", "wpmz/waylines.wpml"), entries.keys)
-        val dbf = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
-        entries.values.forEach { dbf.newDocumentBuilder().parse(ByteArrayInputStream(it)) }
-
-        val waylines = entries.getValue("wpmz/waylines.wpml").toString(Charsets.UTF_8)
-        val actions = Regex("<wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>").findAll(waylines).count()
-        assertEquals(plan.parts[0].size, actions)
-        assertTrue(waylines.contains("toPointAndStopWithDiscontinuityCurvature"))
+        return entries
     }
 }

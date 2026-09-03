@@ -63,19 +63,27 @@ class SmartMissionPlannerTest {
 
     @Test
     fun batterySplitPrefersSurveyLineEndsAndCountsRealDjiWaypoints() {
-        val points = (0..29).map { i ->
-            LatLng(-26.0, -48.0 + i * 0.0001)
+        // 12 faixas x 10 fotos. Com limite mínimo válido de 20 WP DJI,
+        // a primeira parte pode conter no máximo 10 faixas (20 WP reais).
+        val points = (0..119).map { i ->
+            LatLng(-26.0, -48.0 + i * 0.00001)
         }
-        val lines = listOf(
-            SurveyLine(points[0], points[9], 0, 9, 10.0),
-            SurveyLine(points[10], points[19], 10, 19, 10.0),
-            SurveyLine(points[20], points[29], 20, 29, 10.0)
-        )
+        val lines = (0 until 12).map { lineIndex ->
+            val start = lineIndex * 10
+            val end = start + 9
+            SurveyLine(
+                start = points[start],
+                end = points[end],
+                photoStartIndex = start,
+                photoEndIndex = end,
+                photoSpacingM = 10.0
+            )
+        }
 
         val plan = SmartMissionPlanner.splitByBattery(
             waypoints = points,
             speedMs = 10.0,
-            maxWaypointsPerMission = 4,
+            maxWaypointsPerMission = 20,
             options = SmartMissionPlanner.Options(
                 nominalBatteryMinutes = 30.0,
                 reservePct = 25.0,
@@ -86,10 +94,10 @@ class SmartMissionPlannerTest {
         )
 
         assertEquals(2, plan.parts.size)
-        assertEquals(20, plan.infos[0].endPhotoNumber)
-        assertEquals(4, plan.infos[0].waypointCount)
-        assertEquals(21, plan.infos[1].startPhotoNumber)
-        assertEquals(30, plan.infos[1].endPhotoNumber)
-        assertEquals(2, plan.infos[1].waypointCount)
+        assertEquals(100, plan.infos[0].endPhotoNumber)
+        assertEquals(20, plan.infos[0].waypointCount)
+        assertEquals(101, plan.infos[1].startPhotoNumber)
+        assertEquals(120, plan.infos[1].endPhotoNumber)
+        assertEquals(4, plan.infos[1].waypointCount)
     }
 }

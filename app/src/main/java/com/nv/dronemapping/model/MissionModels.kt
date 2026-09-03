@@ -29,6 +29,22 @@ data class CameraModel(
     val aspectHeight: Double = 3.0
 )
 
+/**
+ * Uma faixa efetiva de levantamento.
+ *
+ * Os pontos de foto continuam separados em MissionPlan.waypoints para preservar
+ * a visualização e as estatísticas atuais do app. Esta estrutura guarda somente
+ * a geometria necessária ao voo contínuo e a faixa de índices de fotos que
+ * pertencem a cada linha.
+ */
+data class SurveyLine(
+    val start: LatLng,
+    val end: LatLng,
+    val photoStartIndex: Int,
+    val photoEndIndex: Int,
+    val photoSpacingM: Double
+)
+
 data class MissionStats(
     val areaM2: Double,
     val gsdCmPx: Double,
@@ -46,10 +62,14 @@ data class MissionStats(
 
 data class MissionPlan(
     val boundary: List<LatLng>,
+    /** Pontos previstos de disparo, mantidos para UI, estatísticas e retomada. */
     val waypoints: List<LatLng>,
+    /** Partes por bateria expressas em faixas dos pontos previstos de foto. */
     val parts: List<List<LatLng>>,
     val settings: MissionSettings,
-    val stats: MissionStats
+    val stats: MissionStats,
+    /** Geometria real das faixas usada pelo exportador DJI para voo contínuo. */
+    val surveyLines: List<SurveyLine> = emptyList()
 )
 
 data class SavedProject(

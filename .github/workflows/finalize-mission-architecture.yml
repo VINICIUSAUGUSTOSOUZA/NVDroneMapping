@@ -1,0 +1,45 @@
+name: Finalize Mission Architecture
+
+on:
+  push:
+    branches: [ "feat/dji-continuous-mapping" ]
+    paths:
+      - "tools/finalize_mission_architecture.py"
+      - ".github/workflows/finalize-mission-architecture.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          ref: feat/dji-continuous-mapping
+          fetch-depth: 0
+
+      - name: Apply safe migration
+        run: python3 tools/finalize_mission_architecture.py
+
+      - name: Validate patch
+        shell: bash
+        run: |
+          git diff --check
+          ! grep -R 'getDeclaredField("plan")\|getDeclaredMethod' app/src/main/java/com/nv/dronemapping/ui app/src/main/java/com/nv/dronemapping/MainActivity.kt
+          grep -q 'MissionUiHost' app/src/main/java/com/nv/dronemapping/MainActivity.kt
+          grep -q 'SmartPlanningController(this, this)' app/src/main/java/com/nv/dronemapping/MainActivity.kt
+
+      - name: Commit migrated MainActivity
+        shell: bash
+        run: |
+          if git diff --quiet -- app/src/main/java/com/nv/dronemapping/MainActivity.kt; then
+            echo "No migration changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/nv/dronemapping/MainActivity.kt
+          git commit -m "Finalizar integração explícita da missão"
+          git push origin HEAD:feat/dji-continuous-mapping

@@ -36,4 +36,27 @@ class SmartMissionPlannerTest {
         val secondStart = plan.infos[1].startPhotoNumber
         assertEquals(5, firstEnd - secondStart + 1)
     }
+
+    @Test
+    fun continuousCaptureDoesNotAddStopTimePerPhoto() {
+        val points = (0..10).map { i ->
+            LatLng(-26.0, -48.0 + i * 0.0001)
+        }
+
+        val plan = SmartMissionPlanner.splitByBattery(
+            waypoints = points,
+            speedMs = 5.0,
+            maxWaypointsPerMission = 20,
+            options = SmartMissionPlanner.Options(
+                nominalBatteryMinutes = 30.0,
+                reservePct = 25.0,
+                overlapPhotos = 0
+            ),
+            home = null
+        )
+
+        val surveySeconds = plan.infos.first().surveySeconds
+        assertTrue(surveySeconds > 0.0)
+        assertTrue(surveySeconds < 30.0)
+    }
 }

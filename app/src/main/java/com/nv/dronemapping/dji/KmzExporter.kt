@@ -3,7 +3,6 @@ package com.nv.dronemapping.dji
 import com.nv.dronemapping.geometry.GeoMath
 import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionPlan
-import com.nv.dronemapping.model.SurveyLine
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.util.Locale
@@ -24,8 +23,7 @@ object KmzExporter {
 
     private data class ExportRoute(
         val points: List<LatLng>,
-        val lines: List<ExportLine>,
-        val legacyPhotoAtEveryPoint: Boolean
+        val lines: List<ExportLine>
     )
 
     fun writeKmz(
@@ -35,6 +33,11 @@ object KmzExporter {
         output: OutputStream
     ) {
         require(partIndex in plan.parts.indices)
+        require(plan.surveyLines.isNotEmpty()) {
+            "Este plano é de uma versão antiga. Gere o plano novamente antes de exportar para DJI."
+        }
+        require(plan.photoPoints.size >= 2) { "Missão sem pontos de foto suficientes." }
+
         val photoPart = plan.parts[partIndex]
         require(photoPart.size >= 2)
 
@@ -44,8 +47,9 @@ object KmzExporter {
             missionName
         }
 
-        val route = buildExportRoute(plan, partIndex, photoPart)
+        val route = buildExportRoute(plan, partIndex)
         require(route.points.size >= 2) { "Parte sem geometria suficiente para exportar." }
+        require(route.lines.isNotEmpty()) { "Parte sem faixa de fotografia válida." }
         require(route.points.size <= 200) {
             "Esta parte excede 200 waypoints DJI. Divida a missão em mais partes."
         }
@@ -69,7 +73,9 @@ object KmzExporter {
         val boundaryCoords = (plan.boundary + plan.boundary.first()).joinToString(" ") {
             f("%.8f,%.8f,0", it.lon, it.lat)
         }
-        val routeCoords = plan.waypoints.joinToString(" ") {
+        val routePoints = plan.routeWaypoints.takeIf { it.size >= 2 }
+            ?: plan.surveyLines.flatMap { listOf(it.start, it.end) }
+        val routeCoords = routePoints.joinToString(" ") {
             f("%.8f,%.8f,%.1f", it.lon, it.lat, plan.settings.altitudeM)
         }
         val xml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -132,53 +138,32 @@ $config
         fun actionsAt(index: Int): StringBuilder =
             actionsByWaypoint.getOrPut(index) { StringBuilder() }
 
-        if (route.legacyPhotoAtEveryPoint) {
-            route.points.forEachIndexed { index, _ ->
-                if (index == 0) {
-                    actionsAt(index).append(
-                        gimbalAndPhotoAction(
-                            groupId = nextGroupId++,
-                            index = index,
-                            pitch = s.gimbalPitchDeg
-                        )
-                    )
-                } else {
-                    actionsAt(index).append(
-                        takePhotoAtPointAction(
-                            groupId = nextGroupId++,
-                            index = index
-                        )
-                    )
-                }
-            }
-        } else {
-            route.lines.forEachIndexed { lineIndex, line ->
-                if (lineIndex == 0) {
-                    actionsAt(line.startIndex).append(
-                        gimbalAndPhotoAction(
-                            groupId = nextGroupId++,
-                            index = line.startIndex,
-                            pitch = s.gimbalPitchDeg
-                        )
-                    )
-                } else {
-                    actionsAt(line.startIndex).append(
-                        takePhotoAtPointAction(
-                            groupId = nextGroupId++,
-                            index = line.startIndex
-                        )
-                    )
-                }
-
+        route.lines.forEachIndexed { lineIndex, line ->
+            if (lineIndex == 0) {
                 actionsAt(line.startIndex).append(
-                    takePhotoByDistanceAction(
+                    gimbalAndPhotoAction(
                         groupId = nextGroupId++,
-                        startIndex = line.startIndex,
-                        endIndex = line.endIndex,
-                        spacingM = line.photoSpacingM
+                        index = line.startIndex,
+                        pitch = s.gimbalPitchDeg
+                    )
+                )
+            } else {
+                actionsAt(line.startIndex).append(
+                    takePhotoAtPointAction(
+                        groupId = nextGroupId++,
+                        index = line.startIndex
                     )
                 )
             }
+
+            actionsAt(line.startIndex).append(
+                takePhotoByDistanceAction(
+                    groupId = nextGroupId++,
+                    startIndex = line.startIndex,
+                    endIndex = line.endIndex,
+                    spacingM = line.photoSpacingM
+                )
+            )
         }
 
         val baseDamping = min(
@@ -231,23 +216,10 @@ $placemarks  </Folder>
 
     private fun buildExportRoute(
         plan: MissionPlan,
-        partIndex: Int,
-        photoPart: List<LatLng>
+        partIndex: Int
     ): ExportRoute {
-        if (plan.surveyLines.isEmpty()) {
-            return ExportRoute(
-                points = photoPart,
-                lines = emptyList(),
-                legacyPhotoAtEveryPoint = true
-            )
-        }
-
         val partRange = findPartPhotoRange(plan, partIndex)
-            ?: return ExportRoute(
-                points = photoPart,
-                lines = emptyList(),
-                legacyPhotoAtEveryPoint = true
-            )
+            ?: error("Não foi possível localizar a faixa de fotos desta parte.")
 
         val routePoints = mutableListOf<LatLng>()
         val exportLines = mutableListOf<ExportLine>()
@@ -270,8 +242,8 @@ $placemarks  </Folder>
             val photoEnd = min(line.photoEndIndex, partRange.last)
             if (photoEnd <= photoStart) return@forEach
 
-            val startPoint = plan.waypoints.getOrNull(photoStart) ?: line.start
-            val endPoint = plan.waypoints.getOrNull(photoEnd) ?: line.end
+            val startPoint = plan.photoPoints.getOrNull(photoStart) ?: line.start
+            val endPoint = plan.photoPoints.getOrNull(photoEnd) ?: line.end
             if (GeoMath.distanceM(startPoint, endPoint) < 0.50) return@forEach
 
             val startIndex = appendRoutePoint(startPoint)
@@ -285,18 +257,13 @@ $placemarks  </Folder>
             )
         }
 
-        if (routePoints.size < 2 || exportLines.isEmpty()) {
-            return ExportRoute(
-                points = photoPart,
-                lines = emptyList(),
-                legacyPhotoAtEveryPoint = true
-            )
+        require(routePoints.size >= 2 && exportLines.isNotEmpty()) {
+            "A parte não contém faixa contínua válida. Gere o plano novamente."
         }
 
         return ExportRoute(
             points = routePoints,
-            lines = exportLines,
-            legacyPhotoAtEveryPoint = false
+            lines = exportLines
         )
     }
 
@@ -308,7 +275,7 @@ $placemarks  </Folder>
             val part = plan.parts.getOrNull(partIndex) ?: return null
             val searchStart = max(0, searchCursor - 25)
             val found = findSubsequence(
-                all = plan.waypoints,
+                all = plan.photoPoints,
                 sub = part,
                 fromIndex = searchStart
             )

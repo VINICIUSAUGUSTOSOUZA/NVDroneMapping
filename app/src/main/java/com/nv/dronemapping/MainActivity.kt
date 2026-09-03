@@ -2,6 +2,10 @@ package com.nv.dronemapping
 
 import com.nv.dronemapping.ui.BottomNavigation
 import com.nv.dronemapping.ui.PhotoPointsOverlay
+import com.nv.dronemapping.ui.MissionUiHost
+import com.nv.dronemapping.ui.SmartPlanningController
+import com.nv.dronemapping.ui.ProfessionalMissionController
+import com.nv.dronemapping.model.SurveyLine
 import android.widget.LinearLayout
 import android.Manifest
 import android.content.Intent
@@ -60,10 +64,12 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), MissionUiHost {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var store: ProjectStore
+    private lateinit var smartPlanningController: SmartPlanningController
+    private lateinit var professionalMissionController: ProfessionalMissionController
 
     private val referenceBoundary = mutableListOf<LatLng>()
     private val flightBoundary = mutableListOf<LatLng>()
@@ -315,6 +321,11 @@ class MainActivity : AppCompatActivity() {
         setupActions()
         setupSettingsBehavior()
 
+        smartPlanningController = SmartPlanningController(this, this)
+        professionalMissionController = ProfessionalMissionController(this, this)
+        smartPlanningController.install()
+        professionalMissionController.install()
+
         updateBearingStatus()
         updateStatsAreaOnly()
         ensureConsentAndTutorial()
@@ -348,7 +359,11 @@ class MainActivity : AppCompatActivity() {
                 },
                 onDJI = {
                     runCatching {
-                        showDjiGuide()
+                        if (::smartPlanningController.isInitialized) {
+                            smartPlanningController.showDjiGuide()
+                        } else {
+                            showDjiGuide()
+                        }
                     }.onFailure {
                         toast("Erro ao abrir DJI: ${it.message}")
                     }
@@ -602,7 +617,11 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnExport.setOnClickListener {
 
-            choosePartAndExport()
+            if (::smartPlanningController.isInitialized) {
+                smartPlanningController.showExportSummary()
+            } else {
+                choosePartAndExport()
+            }
         }
 
         binding.btnShare.setOnClickListener {
@@ -682,7 +701,11 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnDjiGuide.setOnClickListener {
 
-            showDjiGuide()
+            if (::smartPlanningController.isInitialized) {
+                smartPlanningController.showDjiGuide()
+            } else {
+                showDjiGuide()
+            }
         }
     }
 
@@ -778,21 +801,36 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val invertedPlan = currentPlan.copy(
-            waypoints = currentPlan.waypoints.reversed(),
-            parts = currentPlan.parts.reversed().map {
-                it.reversed()
+        val photoCount = currentPlan.photoPoints.size
+        val reversedSurveyLines = currentPlan.surveyLines
+            .asReversed()
+            .map { line ->
+                SurveyLine(
+                    start = line.end,
+                    end = line.start,
+                    photoStartIndex = photoCount - 1 - line.photoEndIndex,
+                    photoEndIndex = photoCount - 1 - line.photoStartIndex,
+                    photoSpacingM = line.photoSpacingM
+                )
             }
+
+        val invertedBase = currentPlan.copy(
+            waypoints = currentPlan.photoPoints.asReversed(),
+            parts = currentPlan.parts.asReversed().map { it.asReversed() },
+            surveyLines = reversedSurveyLines,
+            routeWaypoints = reversedSurveyLines.flatMap { listOf(it.start, it.end) }
         )
 
-        plan = invertedPlan
+        val invertedPlan = if (::smartPlanningController.isInitialized) {
+            smartPlanningController.applyBatteryPlan(invertedBase)
+        } else {
+            invertedBase
+        }
 
-        drawRoute(invertedPlan)
-        updateStats(invertedPlan)
-        updateBearingStatus(invertedPlan.stats.effectiveBearingDeg)
+        replaceMissionPlan(invertedPlan)
 
         binding.txtHint.text =
-            "Plano invertido. Saída e chegada foram trocadas."
+            "Plano invertido. Saída, chegada, faixas e disparos foram invertidos."
 
         toast("Missão invertida: sentido, saída e chegada atualizados")
     }
@@ -801,87 +839,48 @@ class MainActivity : AppCompatActivity() {
         showToast: Boolean = true
     ) {
 
-        if (
-            flightBoundary.size < 3
-        ) {
-
-            toast(
-                "Desenhe o quadro de voo com pelo menos 3 vértices"
-            )
-
+        if (flightBoundary.size < 3) {
+            toast("Desenhe o quadro de voo com pelo menos 3 vértices")
             return
         }
 
-        val settings =
-            readSettings()
-                ?: return
+        if (::smartPlanningController.isInitialized) {
+            smartPlanningController.prepareBeforePlan()
+        }
+
+        val settings = readSettings() ?: return
 
         runCatching {
-
             GridPlanner.plan(
                 flightBoundary.toList(),
                 settings
             )
-
         }.onSuccess { generated ->
-
             val oriented = GridPlanner.orientTowardStart(
                 generated,
                 preferredStart
             )
 
-            plan =
+            val finalized = if (::smartPlanningController.isInitialized) {
+                smartPlanningController.applyBatteryPlan(oriented)
+            } else {
                 oriented
-
-            binding.btnExport.isEnabled =
-                true
-
-            binding.btnShare.isEnabled =
-                true
-
-            binding.btnPreviewKml.isEnabled =
-                true
-
-            drawRoute(
-                oriented
-            )
-
-            updateStats(
-                oriented
-            )
-
-            updateBearingStatus(
-                oriented.stats.effectiveBearingDeg
-            )
-
-            binding.txtHint.text =
-                if (
-                    oriented.parts.size > 1
-                ) {
-
-                    "Plano aplicado: ${oriented.parts.size} partes. Revise as linhas."
-
-                } else {
-
-                    "Plano aplicado. Use -15° / +15° para rotacionar as linhas."
-                }
-
-            if (
-                showToast
-            ) {
-
-                toast(
-                    "Plano de voo aplicado dentro do quadro manual"
-                )
-                showLongRouteWarningIfNeeded(oriented)
             }
 
-        }.onFailure {
+            replaceMissionPlan(finalized)
 
-            toast(
-                it.message
-                    ?: "Erro ao gerar missão"
-            )
+            binding.txtHint.text = if (finalized.parts.size > 1) {
+                "Plano aplicado: ${finalized.parts.size} partes por bateria. Revise as faixas."
+            } else {
+                "Plano aplicado. Fotos por distância nas faixas; use -15° / +15° para rotacionar."
+            }
+
+            if (showToast) {
+                toast("Plano contínuo aplicado dentro do quadro manual")
+                showLongRouteWarningIfNeeded(finalized)
+            }
+        }.onFailure {
+            toast(it.message ?: "Erro ao gerar missão")
         }
     }
 
@@ -1346,7 +1345,7 @@ class MainActivity : AppCompatActivity() {
 
         photoPointsOverlay =
             PhotoPointsOverlay(
-                plan.waypoints
+                plan.photoPoints
             ).also {
                 binding.map.overlays.add(it)
             }
@@ -2048,6 +2047,12 @@ class MainActivity : AppCompatActivity() {
         preferredStart =
             project.preferredStart
 
+        if (::smartPlanningController.isInitialized) {
+            // Projetos persistem a altura resolvida. Ao abrir, ela vira manual
+            // para não ser sobrescrita por uma preferência global de GSD.
+            smartPlanningController.setManualAltitudeMode()
+        }
+
         applySettings(
             project.settings
         )
@@ -2065,15 +2070,19 @@ class MainActivity : AppCompatActivity() {
         val savedPlan =
             project.plan
 
-        if (savedPlan != null) {
-            plan = savedPlan
-            binding.btnExport.isEnabled = true
-            binding.btnShare.isEnabled = true
-            binding.btnPreviewKml.isEnabled = true
-            drawRoute(savedPlan)
-            updateStats(savedPlan)
-            updateBearingStatus(savedPlan.stats.effectiveBearingDeg)
-            binding.txtHint.text = "Projeto e plano carregados"
+        if (savedPlan != null && savedPlan.surveyLines.isNotEmpty()) {
+            val finalized = if (::smartPlanningController.isInitialized) {
+                smartPlanningController.applyBatteryPlan(savedPlan)
+            } else {
+                savedPlan
+            }
+            replaceMissionPlan(finalized)
+            binding.txtHint.text = "Projeto carregado e compatibilizado com a missão contínua"
+        } else if (flightBoundary.size >= 3) {
+            // Segurança extra: ProjectStore já tenta migrar planos antigos. Se a
+            // migração não foi possível, regeneramos pela UI antes de permitir exportação.
+            generateMission(showToast = false)
+            binding.txtHint.text = "Projeto antigo regenerado no formato de missão contínua"
         } else {
             updateBearingStatus()
             updateStatsAreaOnly()
@@ -2145,6 +2154,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun apply2dPreset() {
 
+        if (::smartPlanningController.isInitialized) {
+            smartPlanningController.setManualAltitudeMode()
+        }
+
         binding.inAltitude.setText(
             "60"
         )
@@ -2183,6 +2196,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun apply3dPreset() {
+
+        if (::smartPlanningController.isInitialized) {
+            smartPlanningController.setManualAltitudeMode()
+        }
 
         binding.inAltitude.setText(
             "60"
@@ -2298,6 +2315,10 @@ class MainActivity : AppCompatActivity() {
 
         binding.txtHint.text =
             "Toque no mapa para desenhar o QUADRO DE VOO"
+
+        if (::professionalMissionController.isInitialized) {
+            professionalMissionController.refreshNow()
+        }
     }
 
     private fun redrawReference(
@@ -4261,6 +4282,44 @@ class MainActivity : AppCompatActivity() {
             message,
             Toast.LENGTH_LONG
         ).show()
+    }
+
+
+    // MissionUiHost ---------------------------------------------------------
+    override fun currentMissionPlan(): MissionPlan? = plan
+
+    override fun replaceMissionPlan(plan: MissionPlan) {
+        this.plan = plan
+
+        binding.btnExport.isEnabled = true
+        binding.btnShare.isEnabled = true
+        binding.btnPreviewKml.isEnabled = true
+
+        drawRoute(plan)
+        updateStats(plan)
+        updateBearingStatus(plan.stats.effectiveBearingDeg)
+
+        if (::smartPlanningController.isInitialized) {
+            smartPlanningController.afterPlanRendered(plan)
+        }
+        if (::professionalMissionController.isInitialized) {
+            professionalMissionController.refreshNow()
+        }
+    }
+
+    override fun preferredStartPoint(): LatLng? = preferredStart
+
+    override fun flightBoundaryCount(): Int = flightBoundary.size
+
+    override fun regenerateMissionFromUi() {
+        generateMission(showToast = false)
+    }
+
+    override fun exportMissionPlan(plan: MissionPlan) {
+        if (this.plan != plan) {
+            replaceMissionPlan(plan)
+        }
+        choosePartAndExportInternal(plan)
     }
 
     override fun onResume() {

@@ -1,15 +1,9 @@
 package com.nv.dronemapping.ui
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.DashPathEffect
-import android.graphics.Paint
-import android.graphics.drawable.BitmapDrawable
 import android.text.InputType
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -21,47 +15,175 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.nv.dronemapping.MainActivity
 import com.nv.dronemapping.R
-import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionPlan
 import com.nv.dronemapping.planning.SmartMissionPlanner
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Overlay
-import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
 
 /**
- * Camada aditiva do planejamento inteligente.
+ * Planejamento inteligente com integração explícita à MainActivity.
  *
- * Não substitui GridPlanner, armazenamento de projetos ou exportador DJI.
- * Trabalha sobre a rota já gerada pelo app e reorganiza somente as partes DJI
- * para que cada parte caiba na janela segura de uma bateria.
+ * Não usa reflection, não substitui listeners de outros componentes e não toca
+ * em campos privados da Activity. Toda troca de estado passa por MissionUiHost.
  */
 class SmartPlanningController(
-    private val activity: MainActivity
+    private val activity: MainActivity,
+    private val host: MissionUiHost
 ) {
 
     private val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private var options = loadOptions()
     private var lastBatteryPlan: SmartMissionPlanner.BatteryPlan? = null
-    private val batteryOverlays = mutableListOf<Overlay>()
     private var smartButton: Button? = null
-    private var selectingStartAtTouch = false
+    private var altitudeModeStatus: TextView? = null
 
     fun install() {
         installSmartPlanningButton()
-        installPlanningHooks()
-        installExportSummary()
-        installDjiGuide()
+        refreshSmartButton()
+        refreshAltitudeModeUi()
+    }
+
+    /** Chamado explicitamente pela Activity imediatamente antes de ler os campos. */
+    fun prepareBeforePlan() {
+        if (!options.autoAltitudeFromGsd) return
+
+        val altitude = runCatching {
+            SmartMissionPlanner.altitudeForGsd(options.targetGsdCmPx)
+        }.getOrNull() ?: return
+
+        if (altitude in 10.0..500.0) {
+            activity.findViewById<EditText>(R.id.inAltitude)
+                ?.setText(formatNumber(altitude))
+        }
+    }
+
+    /**
+     * Aplica a divisão por bateria sobre um plano recém-gerado, privilegiando
+     * finais de faixa e considerando os waypoints reais do DJI.
+     */
+    fun applyBatteryPlan(plan: MissionPlan): MissionPlan {
+        val batteryPlan = calculateBatteryPlan(plan) ?: return plan
+        lastBatteryPlan = batteryPlan
+
+        return plan.copy(
+            parts = batteryPlan.parts,
+            stats = plan.stats.copy(partCount = batteryPlan.parts.size)
+        )
+    }
+
+    /** Chamado depois que a Activity já desenhou/atualizou as estatísticas. */
+    fun afterPlanRendered(plan: MissionPlan) {
+        val batteryPlan = calculateBatteryPlan(plan)
+        if (batteryPlan != null) {
+            lastBatteryPlan = batteryPlan
+            appendSmartStats(batteryPlan)
+        }
+        refreshSmartButton()
+        refreshAltitudeModeUi()
+    }
+
+    fun setManualAltitudeMode() {
+        if (!options.autoAltitudeFromGsd) {
+            refreshAltitudeModeUi()
+            return
+        }
+
+        options = options.copy(autoAltitudeFromGsd = false)
+        saveOptions(options)
+        refreshSmartButton()
+        refreshAltitudeModeUi()
+    }
+
+    fun showExportSummary() {
+        val current = host.currentMissionPlan() ?: return
+        val updated = applyBatteryPlan(current)
+
+        if (updated != current) {
+            host.replaceMissionPlan(updated)
+        }
+
+        val batteryPlan = lastBatteryPlan ?: calculateBatteryPlan(updated)
+        val totalBatteryMinutes = batteryPlan
+            ?.infos
+            ?.sumOf { it.estimatedSeconds }
+            ?.div(60.0)
+
+        val altitudeMode = if (options.autoAltitudeFromGsd) {
+            "Automática por GSD (${formatNumber(options.targetGsdCmPx)} cm/px)"
+        } else {
+            "Manual"
+        }
+
+        val message = buildString {
+            append("Modo de altura: $altitudeMode\n")
+            append("Altura exportada: ${formatNumber(updated.settings.altitudeM)} m\n")
+            append("Velocidade: ${formatNumber(updated.settings.speedMs)} m/s\n")
+            append(String.format(Locale.getDefault(), "GSD: %.2f cm/pixel\n", updated.stats.gsdCmPx))
+            append("Sobreposição: ${formatNumber(updated.settings.frontOverlapPct)}% frontal / ${formatNumber(updated.settings.sideOverlapPct)}% lateral\n")
+            append("Fotos previstas: ${updated.stats.photoCount}\n")
+            append("Faixas: ${updated.surveyLines.size}\n")
+
+            if (batteryPlan != null) {
+                append("Baterias/partes: ${batteryPlan.batteryCount}\n")
+                append(String.format(Locale.getDefault(), "Reserva planejada: %.0f%%\n", batteryPlan.reservePct))
+                append(String.format(Locale.getDefault(), "Janela útil: %.1f min por bateria\n", batteryPlan.usableSeconds / 60.0))
+                if (totalBatteryMinutes != null) {
+                    append(String.format(Locale.getDefault(), "Tempo operacional estimado: %.1f min\n", totalBatteryMinutes))
+                }
+                batteryPlan.infos.forEach { info ->
+                    append(
+                        String.format(
+                            Locale.getDefault(),
+                            "Parte %d: fotos %d–%d | %d WP DJI | ~%.1f min%s\n",
+                            info.partNumber,
+                            info.startPhotoNumber,
+                            info.endPhotoNumber,
+                            info.waypointCount,
+                            info.estimatedSeconds / 60.0,
+                            if (info.exceedsUsableTime) " ⚠" else ""
+                        )
+                    )
+                }
+                if (!batteryPlan.homeUsed) {
+                    append("\n⚠ Partida não definida: ida/retorno não entraram no cálculo.")
+                }
+            } else {
+                append("Partes DJI: ${updated.parts.size}")
+            }
+        }
+
+        AlertDialog.Builder(activity)
+            .setTitle("Resumo antes de exportar")
+            .setMessage(message.trim())
+            .setPositiveButton("CONTINUAR") { _, _ ->
+                host.exportMissionPlan(updated)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    fun showDjiGuide() {
+        AlertDialog.Builder(activity)
+            .setTitle("Levar a missão ao DJI Fly")
+            .setMessage(
+                "1. Importe KML/KMZ/DXF somente como referência, se quiser.\n\n" +
+                    "2. Desenhe o QUADRO DE VOO e defina INÍCIO/Partida para incluir ida e retorno no cálculo.\n\n" +
+                    "3. Em Voo > PLANEJAMENTO escolha claramente ALTURA MANUAL ou ALTURA AUTOMÁTICA POR GSD.\n\n" +
+                    "4. Gere o plano. As bolinhas no mapa são posições previstas de foto; os waypoints DJI são somente a geometria das faixas.\n\n" +
+                    "5. Durante cada faixa o disparo é por distância e o drone não deve parar em cada fotografia. As curvas usam passagem contínua quando há espaço geométrico seguro.\n\n" +
+                    "6. Se a missão exceder a janela de bateria, o NV Mapping prefere encerrar a parte no final de uma faixa e repete algumas fotos na retomada.\n\n" +
+                    "7. Exporte cada Parte DJI separadamente.\n\n" +
+                    "8. No DJI Fly, crie/salve uma missão Waypoint temporária e substitua o KMZ pelo arquivo exportado.\n\n" +
+                    "9. Reabra a missão e CONFIRA rota, altura, velocidade, RTH, gimbal e ações antes de decolar.\n\n" +
+                    "10. Faça o primeiro teste em área aberta e pequena. Não use a primeira validação em produção."
+            )
+            .setPositiveButton("ENTENDI", null)
+            .show()
     }
 
     private fun installSmartPlanningButton() {
         val panel = activity.findViewById<LinearLayout>(R.id.panelFlight) ?: return
 
-        if (panel.findViewWithTag<View>(SMART_BUTTON_TAG) != null) {
-            return
-        }
+        if (panel.findViewWithTag<View>(SMART_BUTTON_TAG) != null) return
 
         val button = Button(activity).apply {
             tag = SMART_BUTTON_TAG
@@ -70,9 +192,7 @@ class SmartPlanningController(
             textSize = 9.0f
             isAllCaps = false
             setPadding(dp(8), 0, dp(8), 0)
-            setOnClickListener {
-                showPlanningDialog()
-            }
+            setOnClickListener { showPlanningDialog() }
         }
 
         button.layoutParams = LinearLayout.LayoutParams(
@@ -84,44 +204,58 @@ class SmartPlanningController(
 
         panel.addView(button)
         smartButton = button
-        refreshSmartButton()
     }
 
-    private fun installPlanningHooks() {
-        listOf(
-            R.id.btnGenerate,
-            R.id.btnRotateLeft,
-            R.id.btnRotateRight,
-            R.id.btnInvert
-        ).forEach { id ->
-            activity.findViewById<View>(id)?.setOnTouchListener { view, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> prepareBeforePlan()
-                    MotionEvent.ACTION_UP -> view.post { applyBatteryPlanToCurrentMission() }
-                }
-                false
-            }
+    private fun installAltitudeModeStatus() {
+        val altitude = activity.findViewById<EditText>(R.id.inAltitude) ?: return
+        val parent = altitude.parent as? ViewGroup ?: return
+
+        val existing = parent.findViewWithTag<TextView>(ALTITUDE_STATUS_TAG)
+        if (existing != null) {
+            altitudeModeStatus = existing
+            return
         }
 
-        // Quando o usuário define a Partida do drone pelo mapa, o MainActivity
-        // regenera a missão no mesmo toque. Só reagimos se esse modo estava ativo.
-        activity.findViewById<MapView>(R.id.map)?.setOnTouchListener { map, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    selectingStartAtTouch = readPrivateBoolean("selectingStartPoint")
-                    if (selectingStartAtTouch) {
-                        prepareBeforePlan()
-                    }
-                }
+        val status = TextView(activity).apply {
+            tag = ALTITUDE_STATUS_TAG
+            textSize = 9.5f
+            setPadding(0, dp(2), 0, dp(4))
+        }
 
-                MotionEvent.ACTION_UP -> {
-                    if (selectingStartAtTouch) {
-                        selectingStartAtTouch = false
-                        map.post { applyBatteryPlanToCurrentMission() }
-                    }
+        val index = parent.indexOfChild(altitude)
+        parent.addView(status, (index + 1).coerceAtMost(parent.childCount))
+        altitudeModeStatus = status
+    }
+
+    private fun refreshAltitudeModeUi() {
+        val altitude = activity.findViewById<EditText>(R.id.inAltitude) ?: return
+
+        if (options.autoAltitudeFromGsd) {
+            val calculated = runCatching {
+                SmartMissionPlanner.altitudeForGsd(options.targetGsdCmPx)
+            }.getOrNull()
+
+            if (calculated != null && calculated in 10.0..500.0) {
+                altitude.setText(formatNumber(calculated))
+            }
+
+            altitude.isEnabled = false
+            altitude.alpha = 0.70f
+            altitudeModeStatus?.apply {
+                setTextColor(Color.rgb(0, 105, 92))
+                text = if (calculated != null) {
+                    "ALTURA AUTOMÁTICA POR GSD • ${formatNumber(options.targetGsdCmPx)} cm/px → ${formatNumber(calculated)} m • campo bloqueado"
+                } else {
+                    "ALTURA AUTOMÁTICA POR GSD • revise o GSD"
                 }
             }
-            false
+        } else {
+            altitude.isEnabled = true
+            altitude.alpha = 1.0f
+            altitudeModeStatus?.apply {
+                setTextColor(Color.rgb(55, 71, 79))
+                text = "ALTURA MANUAL • o valor digitado acima será usado no planejamento e exportado ao DJI"
+            }
         }
     }
 
@@ -131,8 +265,15 @@ class SmartPlanningController(
             setPadding(dp(16), dp(8), dp(16), dp(10))
         }
 
+        val modePreview = TextView(activity).apply {
+            textSize = 11f
+            setPadding(0, 0, 0, dp(6))
+            paint.isFakeBoldText = true
+        }
+        root.addView(modePreview)
+
         val autoGsd = CheckBox(activity).apply {
-            text = "Calcular altura automaticamente pelo GSD"
+            text = "Usar ALTURA AUTOMÁTICA calculada pelo GSD"
             isChecked = options.autoAltitudeFromGsd
         }
         root.addView(autoGsd)
@@ -159,6 +300,7 @@ class SmartPlanningController(
                 setOnClickListener {
                     autoGsd.isChecked = true
                     gsd.second.setText(formatNumber(value))
+                    updateModePreview(modePreview, true, value)
                 }
             }
             presetRow.addView(
@@ -195,28 +337,31 @@ class SmartPlanningController(
         root.addView(reserve.first)
         root.addView(overlap.first)
 
-        val currentAltitude = activity.findViewById<EditText>(R.id.inAltitude)
-            ?.text?.toString()?.replace(',', '.')?.toDoubleOrNull()
-            ?: 60.0
-
         val info = TextView(activity).apply {
             setPadding(0, dp(8), 0, 0)
-            textSize = 11f
+            textSize = 10.5f
             setTextColor(Color.DKGRAY)
-            text = buildString {
-                append("Altura manual atual: ${formatNumber(currentAltitude)} m. ")
-                append("Se o modo automático estiver desligado, essa altura continua valendo.\n")
-                append("A divisão considera ida até a rota, levantamento, fotos, retorno ao ponto de partida e margem de segurança.")
-            }
+            text =
+                "No modo MANUAL, o campo de altura da tela principal fica liberado. " +
+                    "No modo AUTOMÁTICO, o NV Mapping calcula e bloqueia esse campo para deixar claro qual altura será exportada."
         }
         root.addView(info)
 
-        val scroll = ScrollView(activity).apply {
-            addView(root)
+        fun refreshPreview() {
+            updateModePreview(
+                modePreview,
+                autoGsd.isChecked,
+                parseDouble(gsd.second) ?: options.targetGsdCmPx
+            )
         }
 
+        autoGsd.setOnCheckedChangeListener { _, _ -> refreshPreview() }
+        refreshPreview()
+
+        val scroll = ScrollView(activity).apply { addView(root) }
+
         val dialog = AlertDialog.Builder(activity)
-            .setTitle("Planejamento inteligente")
+            .setTitle("Planejamento")
             .setView(scroll)
             .setPositiveButton("APLICAR", null)
             .setNegativeButton("Cancelar", null)
@@ -260,22 +405,17 @@ class SmartPlanningController(
                         gsd.second.error = "Esse GSD gera altura fora do limite aceito pelo app"
                         return@setOnClickListener
                     }
-                    activity.findViewById<EditText>(R.id.inAltitude)
-                        ?.setText(formatNumber(altitude))
                 }
 
                 options = newOptions
                 saveOptions(newOptions)
+                prepareBeforePlan()
                 refreshSmartButton()
+                refreshAltitudeModeUi()
                 dialog.dismiss()
 
-                // Se já existe quadro de voo, atualiza imediatamente a missão.
-                if (flightBoundarySize() >= 3) {
-                    prepareBeforePlan()
-                    activity.findViewById<View>(R.id.btnGenerate)?.performClick()
-                    activity.findViewById<View>(R.id.btnGenerate)?.post {
-                        applyBatteryPlanToCurrentMission()
-                    }
+                if (host.flightBoundaryCount() >= 3) {
+                    host.regenerateMissionFromUi()
                 }
             }
         }
@@ -283,73 +423,38 @@ class SmartPlanningController(
         dialog.show()
     }
 
-    private fun prepareBeforePlan() {
-        if (!options.autoAltitudeFromGsd) {
-            return
-        }
-
-        val altitude = runCatching {
-            SmartMissionPlanner.altitudeForGsd(options.targetGsdCmPx)
-        }.getOrNull() ?: return
-
-        if (altitude in 10.0..500.0) {
-            activity.findViewById<EditText>(R.id.inAltitude)
-                ?.setText(formatNumber(altitude))
+    private fun updateModePreview(
+        view: TextView,
+        automatic: Boolean,
+        targetGsd: Double
+    ) {
+        if (automatic) {
+            val altitude = runCatching {
+                SmartMissionPlanner.altitudeForGsd(targetGsd)
+            }.getOrNull()
+            view.setTextColor(Color.rgb(0, 105, 92))
+            view.text = if (altitude != null) {
+                "MODO: AUTOMÁTICO POR GSD → altura calculada ${formatNumber(altitude)} m"
+            } else {
+                "MODO: AUTOMÁTICO POR GSD"
+            }
+        } else {
+            view.setTextColor(Color.rgb(55, 71, 79))
+            view.text = "MODO: ALTURA MANUAL → será usado o valor digitado na tela principal"
         }
     }
 
-    private fun applyBatteryPlanToCurrentMission() {
-        val current = currentPlan() ?: run {
-            clearBatteryOverlays()
-            return
-        }
-
-        val home = preferredStart()
-        val batteryPlan = runCatching {
+    private fun calculateBatteryPlan(plan: MissionPlan): SmartMissionPlanner.BatteryPlan? {
+        return runCatching {
             SmartMissionPlanner.splitByBattery(
-                waypoints = current.waypoints,
-                speedMs = current.settings.speedMs,
-                maxWaypointsPerMission = current.settings.maxWaypointsPerMission,
+                waypoints = plan.photoPoints,
+                speedMs = plan.settings.speedMs,
+                maxWaypointsPerMission = plan.settings.maxWaypointsPerMission,
                 options = options,
-                home = home
+                home = host.preferredStartPoint(),
+                surveyLines = plan.surveyLines
             )
-        }.getOrNull() ?: return
-
-        val updated = current.copy(
-            parts = batteryPlan.parts,
-            stats = current.stats.copy(
-                partCount = batteryPlan.parts.size
-            )
-        )
-
-        setCurrentPlan(updated)
-        lastBatteryPlan = batteryPlan
-
-        invokePrivate(
-            "drawRoute",
-            arrayOf(MissionPlan::class.java),
-            arrayOf(updated)
-        )
-        invokePrivate(
-            "updateStats",
-            arrayOf(MissionPlan::class.java),
-            arrayOf(updated)
-        )
-        invokePrivate(
-            "updateBearingStatus",
-            arrayOf(Double::class.javaObjectType),
-            arrayOf(updated.stats.effectiveBearingDeg)
-        )
-
-        appendSmartStats(batteryPlan)
-        drawBatteryOverlays(batteryPlan, home)
-
-        activity.findViewById<TextView>(R.id.txtHint)?.text =
-            if (batteryPlan.batteryCount > 1) {
-                "Plano aplicado: ${batteryPlan.batteryCount} partes por bateria. Cada parte termina com RTH."
-            } else {
-                "Plano aplicado: missão cabe em 1 bateria pela margem configurada."
-            }
+        }.getOrNull()
     }
 
     private fun appendSmartStats(
@@ -377,239 +482,13 @@ class SmartPlanningController(
         }
     }
 
-    private fun drawBatteryOverlays(
-        batteryPlan: SmartMissionPlanner.BatteryPlan,
-        home: LatLng?
-    ) {
-        clearBatteryOverlays()
-        val map = activity.findViewById<MapView>(R.id.map) ?: return
-
-        batteryPlan.parts.forEachIndexed { index, part ->
-            if (part.isEmpty()) return@forEachIndexed
-
-            val end = part.last()
-            val endMarker = Marker(map).apply {
-                position = GeoPoint(end.lat, end.lon)
-                title = "Fim — Bateria ${index + 1}"
-                snippet = "Após esta parte: Return to Home"
-                icon = batteryDot(Color.rgb(211, 47, 47))
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-            }
-            batteryOverlays += endMarker
-            map.overlays.add(endMarker)
-
-            if (index > 0) {
-                val start = part.first()
-                val startMarker = Marker(map).apply {
-                    position = GeoPoint(start.lat, start.lon)
-                    title = "Início — Bateria ${index + 1}"
-                    snippet = "Retomada com sobreposição de fotos"
-                    icon = batteryDot(Color.rgb(46, 125, 50))
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                }
-                batteryOverlays += startMarker
-                map.overlays.add(startMarker)
-            }
-
-            if (home != null) {
-                val returnLine = Polyline(map).apply {
-                    setPoints(
-                        listOf(
-                            GeoPoint(end.lat, end.lon),
-                            GeoPoint(home.lat, home.lon)
-                        )
-                    )
-                    outlinePaint.color = Color.rgb(211, 47, 47)
-                    outlinePaint.strokeWidth = 3f
-                    outlinePaint.pathEffect = DashPathEffect(
-                        floatArrayOf(12f * density(), 8f * density()),
-                        0f
-                    )
-                    title = "Retorno Bateria ${index + 1} → Home"
-                }
-                batteryOverlays += returnLine
-                map.overlays.add(returnLine)
-
-                if (index > 0) {
-                    val start = part.first()
-                    val outboundLine = Polyline(map).apply {
-                        setPoints(
-                            listOf(
-                                GeoPoint(home.lat, home.lon),
-                                GeoPoint(start.lat, start.lon)
-                            )
-                        )
-                        outlinePaint.color = Color.rgb(46, 125, 50)
-                        outlinePaint.strokeWidth = 3f
-                        outlinePaint.pathEffect = DashPathEffect(
-                            floatArrayOf(10f * density(), 8f * density()),
-                            0f
-                        )
-                        title = "Home → início Bateria ${index + 1}"
-                    }
-                    batteryOverlays += outboundLine
-                    map.overlays.add(outboundLine)
-                }
-            }
-        }
-
-        map.invalidate()
-    }
-
-    private fun clearBatteryOverlays() {
-        val map = activity.findViewById<MapView>(R.id.map) ?: return
-        batteryOverlays.forEach { map.overlays.remove(it) }
-        batteryOverlays.clear()
-        map.invalidate()
-    }
-
-    private fun installExportSummary() {
-        activity.findViewById<View>(R.id.btnExport)?.setOnClickListener {
-            val current = currentPlan() ?: return@setOnClickListener
-
-            // Garante que a exportação use a divisão inteligente mais recente.
-            applyBatteryPlanToCurrentMission()
-            val plan = currentPlan() ?: current
-            val batteryPlan = lastBatteryPlan
-
-            val totalBatteryMinutes = batteryPlan
-                ?.infos
-                ?.sumOf { it.estimatedSeconds }
-                ?.div(60.0)
-
-            val message = buildString {
-                append("Altura: ${formatNumber(plan.settings.altitudeM)} m\n")
-                append(String.format(Locale.getDefault(), "GSD: %.2f cm/pixel\n", plan.stats.gsdCmPx))
-                append("Sobreposição: ${formatNumber(plan.settings.frontOverlapPct)}% frontal / ${formatNumber(plan.settings.sideOverlapPct)}% lateral\n")
-                append("Fotos: ${plan.stats.photoCount}\n")
-
-                if (batteryPlan != null) {
-                    append("Baterias/partes: ${batteryPlan.batteryCount}\n")
-                    append(String.format(Locale.getDefault(), "Reserva planejada: %.0f%%\n", batteryPlan.reservePct))
-                    append(String.format(Locale.getDefault(), "Janela útil: %.1f min por bateria\n", batteryPlan.usableSeconds / 60.0))
-                    if (totalBatteryMinutes != null) {
-                        append(String.format(Locale.getDefault(), "Tempo operacional estimado: %.1f min\n", totalBatteryMinutes))
-                    }
-                    batteryPlan.infos.forEach { info ->
-                        append(
-                            String.format(
-                                Locale.getDefault(),
-                                "Parte %d: fotos %d–%d | ~%.1f min%s\n",
-                                info.partNumber,
-                                info.startPhotoNumber,
-                                info.endPhotoNumber,
-                                info.estimatedSeconds / 60.0,
-                                if (info.exceedsUsableTime) " ⚠" else ""
-                            )
-                        )
-                    }
-                    if (!batteryPlan.homeUsed) {
-                        append("\n⚠ Partida não definida: ida/retorno não entraram no cálculo.")
-                    }
-                } else {
-                    append("Partes DJI: ${plan.parts.size}")
-                }
-            }
-
-            AlertDialog.Builder(activity)
-                .setTitle("Resumo antes de exportar")
-                .setMessage(message.trim())
-                .setPositiveButton("CONTINUAR") { _, _ ->
-                    val ok = invokePrivate(
-                        "choosePartAndExportInternal",
-                        arrayOf(MissionPlan::class.java),
-                        arrayOf(plan)
-                    )
-                    if (!ok) {
-                        invokePrivate("choosePartAndExport", emptyArray(), emptyArray())
-                    }
-                }
-                .setNegativeButton("Cancelar", null)
-                .show()
-        }
-    }
-
-    private fun installDjiGuide() {
-        activity.findViewById<View>(R.id.btnDjiGuide)?.setOnClickListener {
-            AlertDialog.Builder(activity)
-                .setTitle("Levar a missão ao DJI Fly")
-                .setMessage(
-                    "1. Importe KML/KMZ/DXF apenas como referência visual, se quiser.\n\n" +
-                        "2. Desenhe o QUADRO DE VOO e defina INÍCIO/Partida do drone para o cálculo considerar ida e retorno.\n\n" +
-                        "3. Em Voo > PLANEJAMENTO, escolha GSD/altura e configure autonomia, reserva e repetição entre baterias.\n\n" +
-                        "4. Toque em APLICAR PLANO. Se a missão passar da janela segura, o NV Mapping cria Parte 1, Parte 2, Parte 3... automaticamente.\n\n" +
-                        "5. Revise no mapa os pontos de fim/início de cada bateria e as linhas de retorno ao Home.\n\n" +
-                        "6. Exporte cada Parte DJI separadamente. Cada Parte corresponde a uma etapa independente de voo.\n\n" +
-                        "7. No DJI Fly, crie/salve uma missão Waypoint temporária para a parte que será executada e substitua o KMZ pelo arquivo exportado pelo NV Mapping.\n\n" +
-                        "8. Reabra a missão no DJI Fly e CONFIRA rota, altura, RTH, gimbal e ações de foto antes de iniciar.\n\n" +
-                        "9. Execute a Parte 1. Ao terminar, a ação final permanece RTH. Espere o pouso e troque fisicamente a bateria.\n\n" +
-                        "10. Para continuar, carregue a Parte 2 no DJI Fly, confira novamente e inicie. Ela começa algumas fotos antes do fim anterior para manter cobertura. Repita nas demais partes.\n\n" +
-                        "11. O Low Battery RTH da DJI continua sendo uma proteção adicional; não espere a bateria crítica para encerrar uma parte planejada.\n\n" +
-                        "Faça o primeiro teste em área aberta e pequena."
-                )
-                .setPositiveButton("ENTENDI", null)
-                .show()
-        }
-    }
-
-    private fun currentPlan(): MissionPlan? {
-        return runCatching {
-            val field = MainActivity::class.java.getDeclaredField("plan")
-            field.isAccessible = true
-            field.get(activity) as? MissionPlan
-        }.getOrNull()
-    }
-
-    private fun setCurrentPlan(plan: MissionPlan) {
-        runCatching {
-            val field = MainActivity::class.java.getDeclaredField("plan")
-            field.isAccessible = true
-            field.set(activity, plan)
-        }
-    }
-
-    private fun preferredStart(): LatLng? {
-        return runCatching {
-            val field = MainActivity::class.java.getDeclaredField("preferredStart")
-            field.isAccessible = true
-            field.get(activity) as? LatLng
-        }.getOrNull()
-    }
-
-    private fun flightBoundarySize(): Int {
-        return runCatching {
-            val field = MainActivity::class.java.getDeclaredField("flightBoundary")
-            field.isAccessible = true
-            (field.get(activity) as? Collection<*>)?.size ?: 0
-        }.getOrDefault(0)
-    }
-
-    private fun readPrivateBoolean(name: String): Boolean {
-        return runCatching {
-            val field = MainActivity::class.java.getDeclaredField(name)
-            field.isAccessible = true
-            field.getBoolean(activity)
-        }.getOrDefault(false)
-    }
-
-    private fun invokePrivate(
-        name: String,
-        types: Array<Class<*>>,
-        args: Array<Any?>
-    ): Boolean {
-        return runCatching {
-            val method = MainActivity::class.java.getDeclaredMethod(name, *types)
-            method.isAccessible = true
-            method.invoke(activity, *args)
-        }.isSuccess
-    }
-
     private fun refreshSmartButton() {
         val mode = if (options.autoAltitudeFromGsd) {
-            "GSD ${formatNumber(options.targetGsdCmPx)} cm"
+            "AUTO GSD ${formatNumber(options.targetGsdCmPx)} cm"
         } else {
-            "Altura manual"
+            "ALTURA MANUAL"
         }
+
         smartButton?.text =
             "PLANEJAMENTO • $mode • Bat ${formatNumber(options.nominalBatteryMinutes)} min • Reserva ${formatNumber(options.reservePct)}%"
     }
@@ -677,33 +556,17 @@ class SmartPlanningController(
         return edit.text?.toString()?.trim()?.replace(',', '.')?.toDoubleOrNull()
     }
 
-    private fun batteryDot(color: Int): BitmapDrawable {
-        val size = dp(22)
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = color
-            style = Paint.Style.FILL
-        }
-        canvas.drawCircle(size / 2f, size / 2f, dp(6).toFloat(), paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = dp(2).toFloat()
-        paint.color = Color.WHITE
-        canvas.drawCircle(size / 2f, size / 2f, dp(6).toFloat(), paint)
-        return BitmapDrawable(activity.resources, bitmap)
-    }
-
     private fun formatNumber(value: Double): String {
         val oneDecimal = String.format(Locale.US, "%.1f", value)
         return oneDecimal.removeSuffix(".0")
     }
 
     private fun density(): Float = activity.resources.displayMetrics.density
-
     private fun dp(value: Int): Int = (value * density()).toInt()
 
     companion object {
         private const val PREFS_NAME = "nv_smart_planning"
         private const val SMART_BUTTON_TAG = "nv_smart_planning_button"
+        private const val ALTITUDE_STATUS_TAG = "nv_altitude_mode_status"
     }
 }

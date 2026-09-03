@@ -5,8 +5,6 @@ import android.app.Application
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
-import com.nv.dronemapping.ui.ProfessionalMissionController
-import com.nv.dronemapping.ui.SmartPlanningController
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
@@ -17,13 +15,8 @@ import kotlin.math.pow
 /**
  * Política isolada do mapa de satélite.
  *
- * Até o zoom 17 usamos os tiles normais do Esri World Imagery, que são rápidos.
- * Nos níveis mais próximos usamos o endpoint /export do mesmo MapServer. O export
- * renderiza a melhor imagem disponível para o bbox solicitado e evita depender de
- * um tile nativo de alta resolução que pode ser a imagem "Map data not yet available".
- *
- * O nome da fonte é novo para não reutilizar caches de tentativas anteriores.
- * Nenhuma regra de missão, rota, fotos, projetos ou exportação do NV Mapping é alterada.
+ * Os controladores de missão agora são instalados explicitamente pela MainActivity;
+ * esta Application não injeta mais lógica de missão por lifecycle callbacks.
  */
 class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCallbacks {
 
@@ -37,8 +30,6 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
 
         activity.window.decorView.post {
             installSatellitePolicy(activity)
-            SmartPlanningController(activity).install()
-            ProfessionalMissionController(activity).install()
         }
     }
 
@@ -48,7 +39,7 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
 
         mapTypeButton.setOnTouchListener { _, event ->
             if (event.actionMasked == MotionEvent.ACTION_UP) {
-                // O click normal do MainActivity troca MAP/SAT. Este post roda logo
+                // O click normal da MainActivity troca MAP/SAT. Este post roda logo
                 // depois e substitui somente a fonte SAT pela versão adaptativa.
                 map.post {
                     applySatellitePolicy(map)
@@ -81,7 +72,6 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
             map.controller.setZoom(zoom)
             map.invalidate()
         } else {
-            // Ao voltar ao mapa normal, deixa o próprio tile source definir o limite.
             map.setMaxZoomLevel(null)
         }
     }

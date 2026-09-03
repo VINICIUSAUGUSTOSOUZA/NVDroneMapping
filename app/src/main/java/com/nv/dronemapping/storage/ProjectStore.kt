@@ -1,6 +1,8 @@
 package com.nv.dronemapping.storage
 
 import android.content.Context
+import com.nv.dronemapping.geometry.GeoMath
+import com.nv.dronemapping.geometry.GridPlanner
 import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionPlan
 import com.nv.dronemapping.model.MissionSettings
@@ -81,7 +83,14 @@ class ProjectStore(context: Context) {
             val boundary = decodePoints(obj.optJSONArray("boundary"))
             val reference = decodePoints(obj.optJSONArray("referenceBoundary"))
             val preferredStart = obj.optJSONObject("preferredStart")?.let(::decodePoint)
-            val savedPlan = obj.optJSONObject("plan")?.let(::decodePlan)
+            val rawSavedPlan = obj.optJSONObject("plan")?.let(::decodePlan)
+            val savedPlan = rawSavedPlan?.let {
+                upgradePlanIfNeeded(
+                    plan = it,
+                    projectBoundary = boundary,
+                    preferredStart = preferredStart
+                )
+            }
 
             SavedProject(
                 name = obj.getString("name"),
@@ -93,6 +102,67 @@ class ProjectStore(context: Context) {
                 plan = savedPlan
             )
         }
+    }
+
+    /**
+     * Projetos gravados antes do voo contínuo não possuem surveyLines/routeWaypoints.
+     * Eles são regenerados silenciosamente ao abrir, usando o quadro e os parâmetros
+     * salvos. A orientação anterior é preservada usando o primeiro ponto antigo como
+     * preferência quando possível.
+     */
+    private fun upgradePlanIfNeeded(
+        plan: MissionPlan,
+        projectBoundary: List<LatLng>,
+        preferredStart: LatLng?
+    ): MissionPlan {
+        if (plan.surveyLines.isNotEmpty()) {
+            if (plan.routeWaypoints.isNotEmpty()) return plan
+
+            val route = routePointsForLines(plan.surveyLines)
+            val distance = GeoMath.polylineDistanceM(route)
+            return plan.copy(
+                routeWaypoints = route,
+                stats = plan.stats.copy(
+                    routeDistanceM = distance,
+                    estimatedFlightSeconds = if (plan.settings.speedMs > 0.0) {
+                        distance / plan.settings.speedMs
+                    } else {
+                        plan.stats.estimatedFlightSeconds
+                    }
+                )
+            )
+        }
+
+        val boundary = plan.boundary.takeIf { it.size >= 3 }
+            ?: projectBoundary.takeIf { it.size >= 3 }
+            ?: return plan
+
+        return runCatching {
+            val regenerated = GridPlanner.plan(boundary, plan.settings)
+
+            val orientationReference =
+                preferredStart ?: plan.photoPoints.firstOrNull()
+
+            GridPlanner.orientTowardStart(
+                regenerated,
+                orientationReference
+            )
+        }.getOrDefault(plan)
+    }
+
+    private fun routePointsForLines(lines: List<SurveyLine>): List<LatLng> {
+        val result = mutableListOf<LatLng>()
+
+        lines.forEach { line ->
+            if (result.lastOrNull()?.let { GeoMath.distanceM(it, line.start) < 0.05 } != true) {
+                result += line.start
+            }
+            if (result.lastOrNull()?.let { GeoMath.distanceM(it, line.end) < 0.05 } != true) {
+                result += line.end
+            }
+        }
+
+        return result
     }
 
     private fun encodePoint(point: LatLng): JSONObject {
@@ -236,7 +306,9 @@ class ProjectStore(context: Context) {
 
         return JSONObject()
             .put("boundary", encodePoints(plan.boundary))
-            .put("waypoints", encodePoints(plan.waypoints))
+            // `waypoints` permanece por compatibilidade: são os photoPoints.
+            .put("waypoints", encodePoints(plan.photoPoints))
+            .put("routeWaypoints", encodePoints(plan.routeWaypoints))
             .put("parts", parts)
             .put("settings", encodeSettings(plan.settings))
             .put("stats", encodeStats(plan.stats))
@@ -255,7 +327,8 @@ class ProjectStore(context: Context) {
             parts = parts,
             settings = decodeSettings(obj.getJSONObject("settings")),
             stats = decodeStats(obj.getJSONObject("stats")),
-            surveyLines = decodeSurveyLines(obj.optJSONArray("surveyLines"))
+            surveyLines = decodeSurveyLines(obj.optJSONArray("surveyLines")),
+            routeWaypoints = decodePoints(obj.optJSONArray("routeWaypoints"))
         )
     }
 }

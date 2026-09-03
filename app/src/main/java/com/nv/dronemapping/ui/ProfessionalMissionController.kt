@@ -10,7 +10,6 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -20,7 +19,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.nv.dronemapping.MainActivity
 import com.nv.dronemapping.R
-import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionPlan
 import com.nv.dronemapping.planning.SmartMissionPlanner
 import org.osmdroid.util.GeoPoint
@@ -29,22 +27,18 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.ceil
 
 /**
- * Acabamento profissional e aditivo para a experiência de missão.
+ * Central visual da missão.
  *
- * Objetivos:
- * - transformar o antigo espaço DJI em uma central clara de MISSÃO;
- * - concentrar resumo, divisão por baterias, exportação e guia no mesmo lugar;
- * - substituir os marcadores de bateria ambíguos por uma única marca B1→B2 por troca;
- * - impedir que um reenquadramento automático interrompa o zoom por gesto do usuário.
- *
- * Não altera GridPlanner, persistência de projetos, geração de fotos ou exportador KMZ.
+ * Lê o estado exclusivamente através de MissionUiHost. Não usa reflection e não
+ * substitui listeners da MainActivity. A Activity chama refreshNow() quando muda
+ * o plano; o TextWatcher existe apenas como atualização visual complementar.
  */
 class ProfessionalMissionController(
-    private val activity: MainActivity
+    private val activity: MainActivity,
+    private val host: MissionUiHost
 ) {
 
     private val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -59,7 +53,11 @@ class ProfessionalMissionController(
         buildMissionWorkspace()
         installStatsObserver()
         installMapGestureGuard()
-        scheduleRefresh()
+        refreshNow()
+    }
+
+    fun refreshNow() {
+        scheduleRefresh(immediate = true)
     }
 
     /** Mantém cinco itens na barra: Projetos | Voo | Foto | Missão | Avançado. */
@@ -83,10 +81,6 @@ class ProfessionalMissionController(
         visit(root)
     }
 
-    /**
-     * Reaproveita os botões existentes e seus listeners.
-     * Exportar/Prévia/Compartilhar saem de Projetos e passam a morar em Missão.
-     */
     private fun buildMissionWorkspace() {
         val panel = activity.findViewById<LinearLayout>(R.id.panelDji) ?: return
         if (panel.findViewWithTag<View>(MISSION_CARD_TAG) != null) return
@@ -128,12 +122,10 @@ class ProfessionalMissionController(
         val exportButton = activity.findViewById<Button>(R.id.btnExport)
         val previewButton = activity.findViewById<Button>(R.id.btnPreviewKml)
         val shareButton = activity.findViewById<Button>(R.id.btnShare)
-
         val oldExportRow = exportButton?.parent as? ViewGroup
 
         val exportRow = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
         }
 
         listOfNotNull(exportButton, previewButton, shareButton).forEachIndexed { index, button ->
@@ -170,7 +162,6 @@ class ProfessionalMissionController(
         }
     }
 
-    /** Atualiza a central de missão toda vez que o plano/estatísticas mudam. */
     private fun installStatsObserver() {
         val stats = activity.findViewById<TextView>(R.id.txtStats) ?: return
         stats.addTextChangedListener(
@@ -184,25 +175,28 @@ class ProfessionalMissionController(
         )
     }
 
-    private fun scheduleRefresh() {
+    private fun scheduleRefresh(immediate: Boolean = false) {
         val generation = ++refreshGeneration
-        val map = activity.findViewById<MapView>(R.id.map)
-        (map ?: activity.window.decorView).postDelayed({
-            if (generation != refreshGeneration) return@postDelayed
-            refreshMissionWorkspace()
-            replaceLegacyBatteryGraphics()
-        }, 220L)
+        val target = activity.findViewById<MapView>(R.id.map) ?: activity.window.decorView
+        val action = {
+            if (generation == refreshGeneration) {
+                refreshMissionWorkspace()
+                replaceBatteryGraphics()
+            }
+        }
+
+        if (immediate) target.post(action) else target.postDelayed(action, 180L)
     }
 
     private fun refreshMissionWorkspace() {
-        val plan = currentPlan()
+        val plan = host.currentMissionPlan()
         val export = activity.findViewById<Button>(R.id.btnExport)
 
         if (plan == null) {
             missionSummary?.text =
-                "Gere o plano de voo. Aqui aparecerão fotos, tempo, distância, baterias e as partes que deverão ser exportadas."
+                "Gere o plano de voo. Aqui aparecerão fotos, faixas, tempo, distância, baterias e partes DJI."
             missionExportHelp?.text =
-                "Fluxo simples: planejar → revisar a missão → exportar → executar no DJI Fly."
+                "Fluxo: planejar → revisar → exportar → conferir no DJI Fly → testar."
             export?.text = "EXPORTAR KMZ"
             return
         }
@@ -211,48 +205,49 @@ class ProfessionalMissionController(
         val batteries = batteryPlan?.batteryCount ?: plan.parts.size.coerceAtLeast(1)
         val changes = (batteries - 1).coerceAtLeast(0)
         val minutes = ceil(plan.stats.estimatedFlightSeconds / 60.0).toInt()
+        val altitudeMode = if (prefs.getBoolean("auto_gsd", false)) "AUTO GSD" else "MANUAL"
 
         missionSummary?.text = buildString {
-            append("${plan.stats.photoCount} fotos • ${formatDistance(plan.stats.routeDistanceM)} • ~${minutes} min\n")
+            append("${plan.stats.photoCount} fotos • ${plan.surveyLines.size} faixas • ${formatDistance(plan.stats.routeDistanceM)} • ~${minutes} min\n")
             append(
                 String.format(
                     Locale.getDefault(),
-                    "Altura %.0f m • GSD %.2f cm/px • %d %s",
+                    "Altura %.0f m (%s) • GSD %.2f cm/px • %d %s",
                     plan.settings.altitudeM,
+                    altitudeMode,
                     plan.stats.gsdCmPx,
                     batteries,
                     if (batteries == 1) "bateria" else "baterias"
                 )
             )
             if (changes > 0) {
-                append("\n$changes ${if (changes == 1) "troca marcada" else "trocas marcadas"} no mapa: ")
+                append("\n$changes ${if (changes == 1) "troca" else "trocas"}: ")
                 append((1..changes).joinToString(" • ") { "B$it→B${it + 1}" })
             } else {
-                append("\nA missão cabe em uma única bateria pela configuração atual.")
+                append("\nA missão cabe em uma bateria pela configuração atual.")
             }
             if (batteryPlan != null && !batteryPlan.homeUsed) {
-                append("\n⚠ Defina INÍCIO/Partida para calcular ida e retorno ao Home.")
+                append("\n⚠ Defina INÍCIO/Partida para calcular ida e retorno.")
             }
-            append("\nToque neste resumo para ver cada parte.")
+            append("\nToque para ver cada parte.")
         }
 
         export?.text =
             if (batteries > 1) "EXPORTAR $batteries PARTES" else "EXPORTAR KMZ"
 
-        missionExportHelp?.text =
-            if (batteries > 1) {
-                "Cada parte corresponde a uma bateria. Exporte e execute na ordem: Parte 1 → troca → Parte 2 → troca → Parte 3..."
-            } else {
-                "Uma única missão. Revise o resumo e exporte o KMZ para execução."
-            }
+        missionExportHelp?.text = if (batteries > 1) {
+            "Cada parte corresponde a uma bateria. O NV Mapping prefere terminar no final de uma faixa e retoma com sobreposição configurada."
+        } else {
+            "Uma missão. As fotos são disparadas por distância durante as faixas; confira tudo no DJI Fly antes de voar."
+        }
     }
 
     private fun showMissionDetails() {
-        val plan = currentPlan()
+        val plan = host.currentMissionPlan()
         if (plan == null) {
             AlertDialog.Builder(activity)
                 .setTitle("Missão")
-                .setMessage("Gere primeiro o plano de voo. Depois esta aba mostrará todas as partes e a ordem de execução.")
+                .setMessage("Gere primeiro o plano de voo.")
                 .setPositiveButton("ENTENDI", null)
                 .show()
             return
@@ -266,44 +261,36 @@ class ProfessionalMissionController(
             append("Área: ${formatArea(plan.stats.areaM2)}\n")
             append("Altura: ${formatNumber(plan.settings.altitudeM)} m\n")
             append(String.format(Locale.getDefault(), "GSD: %.2f cm/pixel\n", plan.stats.gsdCmPx))
-            append("Fotos: ${plan.stats.photoCount}\n")
+            append("Fotos previstas: ${plan.stats.photoCount}\n")
+            append("Faixas: ${plan.surveyLines.size}\n")
+            append("Waypoints geométricos da rota: ${plan.routeWaypoints.size}\n")
             append("Distância: ${formatDistance(plan.stats.routeDistanceM)}\n")
             append("Baterias/partes: $batteries\n")
 
             if (batteryPlan != null) {
-                append(String.format(Locale.getDefault(), "Reserva: %.0f%% • tempo útil: %.1f min/bateria\n", batteryPlan.reservePct, batteryPlan.usableSeconds / 60.0))
+                append(String.format(Locale.getDefault(), "Reserva: %.0f%% • útil: %.1f min/bateria\n", batteryPlan.reservePct, batteryPlan.usableSeconds / 60.0))
                 append("\nPARTES DO VOO\n")
                 batteryPlan.infos.forEach { info ->
                     append(
                         String.format(
                             Locale.getDefault(),
-                            "Parte %d — Bateria %d\nFotos %d a %d • ~%.1f min%s\n",
-                            info.partNumber,
+                            "Parte %d — fotos %d a %d • %d WP DJI • ~%.1f min%s\n",
                             info.partNumber,
                             info.startPhotoNumber,
                             info.endPhotoNumber,
+                            info.waypointCount,
                             info.estimatedSeconds / 60.0,
                             if (info.exceedsUsableTime) " ⚠" else ""
                         )
                     )
-                    if (info.partNumber < batteries) {
-                        append("Fim da parte: RTH → pousar → trocar bateria\n")
-                    } else {
-                        append("Fim da parte: conclusão da missão / RTH\n")
-                    }
-                    append("\n")
                 }
                 if (!batteryPlan.homeUsed) {
-                    append("⚠ INÍCIO/Partida ainda não foi definido; ida e retorno não entraram no cálculo.\n\n")
+                    append("\n⚠ INÍCIO/Partida não definido; ida/retorno não entraram no cálculo.\n")
                 }
             }
 
-            append("COMO EXPORTAR\n")
-            if (batteries > 1) {
-                append("Toque em EXPORTAR $batteries PARTES. Salve primeiro a Parte 1, depois repita para Parte 2, Parte 3 e assim por diante. Cada arquivo corresponde a uma etapa independente no DJI Fly.")
-            } else {
-                append("Toque em EXPORTAR KMZ. A missão será exportada em uma única parte.")
-            }
+            append("\nFOTOGRAFIA\n")
+            append("Os pontos mostrados no mapa são previsões. No KMZ o disparo ocorre por distância somente dentro das faixas, sem transformar cada foto em waypoint.\n")
         }
 
         AlertDialog.Builder(activity)
@@ -313,18 +300,18 @@ class ProfessionalMissionController(
             .show()
     }
 
-    /**
-     * Remove as antigas bolinhas vermelha/verde e linhas extras da divisão de bateria.
-     * No lugar, mostra apenas uma etiqueta inequívoca por troca: B1→B2, B2→B3...
-     */
-    private fun replaceLegacyBatteryGraphics() {
+    private fun replaceBatteryGraphics() {
         val map = activity.findViewById<MapView>(R.id.map) ?: return
-        val plan = currentPlan() ?: run {
+        val plan = host.currentMissionPlan() ?: run {
             clearProfessionalOverlays(map)
             return
         }
-        val batteryPlan = calculateBatteryPlan(plan) ?: return
+        val batteryPlan = calculateBatteryPlan(plan) ?: run {
+            clearProfessionalOverlays(map)
+            return
+        }
 
+        // Remove marcadores legados se uma versão anterior os tiver deixado no mapa.
         val legacy = map.overlays.filter { overlay ->
             when (overlay) {
                 is Marker -> {
@@ -370,11 +357,6 @@ class ProfessionalMissionController(
         professionalOverlays.clear()
     }
 
-    /**
-     * O desenho da rota atual usa reenquadramento animado. Se o operador começa um
-     * gesto de zoom enquanto essa animação ainda está pendente, o mapa pode "voltar"
-     * para o enquadramento geral. Esta proteção dá prioridade ao gesto do usuário.
-     */
     private fun installMapGestureGuard() {
         val map = activity.findViewById<MapView>(R.id.map) ?: return
         if (map.overlays.any { it is UserZoomGuardOverlay }) return
@@ -392,30 +374,18 @@ class ProfessionalMissionController(
                     gestureSerial++
                     mapView.controller.stopAnimation(false)
                 }
-
                 MotionEvent.ACTION_POINTER_DOWN -> {
                     pinch = true
                     mapView.controller.stopAnimation(false)
                 }
-
-                MotionEvent.ACTION_MOVE -> {
-                    if (event.pointerCount > 1) pinch = true
-                }
-
+                MotionEvent.ACTION_MOVE -> if (event.pointerCount > 1) pinch = true
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (pinch) {
                         val serial = gestureSerial
                         val center = GeoPoint(mapView.mapCenter.latitude, mapView.mapCenter.longitude)
                         val zoom = mapView.zoomLevelDouble
-
                         mapView.postDelayed({
-                            if (serial != gestureSerial) return@postDelayed
-                            val zoomMoved = abs(mapView.zoomLevelDouble - zoom) > 0.30
-                            val centerMoved =
-                                abs(mapView.mapCenter.latitude - center.latitude) > 0.00020 ||
-                                    abs(mapView.mapCenter.longitude - center.longitude) > 0.00020
-
-                            if (zoomMoved || centerMoved) {
+                            if (serial == gestureSerial) {
                                 mapView.controller.stopAnimation(false)
                                 mapView.controller.setCenter(center)
                                 mapView.controller.setZoom(zoom)
@@ -432,11 +402,12 @@ class ProfessionalMissionController(
     private fun calculateBatteryPlan(plan: MissionPlan): SmartMissionPlanner.BatteryPlan? {
         return runCatching {
             SmartMissionPlanner.splitByBattery(
-                waypoints = plan.waypoints,
+                waypoints = plan.photoPoints,
                 speedMs = plan.settings.speedMs,
                 maxWaypointsPerMission = plan.settings.maxWaypointsPerMission,
                 options = loadOptions(),
-                home = preferredStart()
+                home = host.preferredStartPoint(),
+                surveyLines = plan.surveyLines
             )
         }.getOrNull()
     }
@@ -449,22 +420,6 @@ class ProfessionalMissionController(
             reservePct = prefs.getFloat("reserve_pct", 25f).toDouble(),
             overlapPhotos = prefs.getInt("overlap_photos", 5)
         )
-    }
-
-    private fun currentPlan(): MissionPlan? {
-        return runCatching {
-            val field = MainActivity::class.java.getDeclaredField("plan")
-            field.isAccessible = true
-            field.get(activity) as? MissionPlan
-        }.getOrNull()
-    }
-
-    private fun preferredStart(): LatLng? {
-        return runCatching {
-            val field = MainActivity::class.java.getDeclaredField("preferredStart")
-            field.isAccessible = true
-            field.get(activity) as? LatLng
-        }.getOrNull()
     }
 
     private fun transitionBadge(from: Int, to: Int): BitmapDrawable {
@@ -523,7 +478,9 @@ class ProfessionalMissionController(
     }
 
     private fun formatNumber(value: Double): String {
-        return String.format(Locale.getDefault(), "%.1f", value).removeSuffix(",0").removeSuffix(".0")
+        return String.format(Locale.getDefault(), "%.1f", value)
+            .removeSuffix(",0")
+            .removeSuffix(".0")
     }
 
     private fun dp(value: Int): Int = (value * activity.resources.displayMetrics.density).toInt()

@@ -1,109 +1,72 @@
-# NV Drone Mapping 1.0.0
+# NV Drone Mapping
 
-Aplicativo Android para planejar missões fotogramétricas e gerar arquivos de missão DJI Fly em KMZ/WPML, com foco inicial no DJI Mini 5 Pro.
+Aplicativo Android para planejamento de missões de mapeamento aéreo, com foco inicial no fluxo DJI Fly / DJI Mini 5 Pro.
 
-## O que já está implementado
+## Fluxo principal
 
-- mapa interativo OpenStreetMap;
-- desenho do perímetro por toques no mapa;
-- edição dos vértices arrastando os marcadores;
-- desfazer e limpar desenho;
-- localização GPS;
-- importação de KML e KMZ com polígono;
-- cálculo de área em m²/ha;
-- cálculo automático da grade de voo;
-- direção automática para reduzir o trajeto;
-- direção manual em graus;
-- altura, velocidade e overlap frontal/lateral configuráveis;
-- preset **2D AUTO** (60 m, 80/70, nadir);
-- preset **CRUZADO AUTO** para duas direções de voo;
-- cálculo de GSD, espaçamento de linhas, espaçamento de fotos, quantidade de fotos, distância e tempo estimado;
-- câmera inicial modelada com FOV 84° e imagem 8192 × 6144;
-- captura **full-auto**: uma ação `takePhoto` em cada waypoint;
-- gimbal configurável (padrão -90°);
-- geração de `wpmz/template.kml` + `wpmz/waylines.wpml` dentro do KMZ;
-- limite configurável de waypoints e divisão automática em várias missões (padrão 190 por parte);
-- código de drone DJI configurável (padrão 68 para o perfil Mini 5 Pro usado nesta versão);
-- prévia KML para abrir no Google Earth;
-- salvar, abrir e excluir projetos localmente;
-- exportar e compartilhar KMZ;
-- guia dentro do app para levar a missão ao DJI Fly;
-- GitHub Actions para testar e compilar APK automaticamente.
+1. Importe KML, KMZ ou DXF como referência visual, se necessário.
+2. Desenhe o quadro de voo no mapa.
+3. Defina altura manual ou use o planejamento automático por GSD.
+4. Configure velocidade e sobreposições frontal/lateral.
+5. Gere as faixas de levantamento.
+6. Revise fotos previstas, rota, bateria e divisão em partes.
+7. Exporte o KMZ DJI.
+8. Reabra a missão no DJI Fly e confira todos os parâmetros antes da execução.
 
-## Importante sobre o DJI Fly / Mini 5 Pro
+## Modelo de missão DJI
 
-O app **não pilota o drone diretamente**. Ele planeja a missão e gera o KMZ. O DJI Fly continua sendo o software que executa a missão no drone.
+A missão separa três conceitos:
 
-No fluxo de drones DJI consumer, não existe um botão genérico de "Importar KMZ" equivalente ao DJI Pilot 2. Por isso, a V1 gera o arquivo e ensina o fluxo de criar uma missão Waypoint temporária no DJI Fly e substituir o KMZ correspondente no armazenamento. O local exato da pasta pode variar entre celular, versão do Android e controle.
+- **Pontos previstos de foto (`photoPoints`)**: usados para visualização, estatísticas e retomada.
+- **Faixas de levantamento (`surveyLines`)**: trechos em que a câmera deve fotografar.
+- **Rota DJI (`routeWaypoints`)**: geometria enxuta enviada ao DJI, sem transformar cada fotografia em waypoint.
 
-O valor `droneEnumValue = 68` é deixado editável porque a compatibilidade do formato consumer foi inferida/validada pela comunidade e pode mudar com firmware/DJI Fly. Antes do primeiro voo real, **abra a missão no DJI Fly e confira visualmente todos os pontos, altura, RTH, gimbal e ações de câmera**.
+No KMZ, as fotografias são programadas por distância (`multipleDistance`) somente dentro das faixas de levantamento. O início de cada faixa recebe uma fotografia explícita para manter a cobertura. Waypoints intermediários usam passagem contínua quando a geometria permite um `waypointTurnDampingDist` seguro.
 
-## Primeiro teste recomendado
+A estrutura exportada continua:
 
-1. Use uma área aberta e pequena.
-2. Faça um polígono de aproximadamente 20 × 30 m.
-3. Use 30 m de altura apenas para o ensaio inicial, respeitando as regras e condições do local.
-4. Use 80% frontal / 70% lateral.
-5. Gere a missão.
-6. Confira a rota no próprio app.
-7. Exporte a **PRÉVIA KML** e confira no Google Earth.
-8. Exporte o **KMZ DJI**.
-9. Leve o KMZ ao DJI Fly.
-10. No DJI Fly, revise a missão inteira antes de autorizar a decolagem.
+```text
+KMZ
+└── wpmz
+    ├── template.kml
+    └── waylines.wpml
+```
 
-## Compilar pelo GitHub
+Namespace WPML utilizado:
 
-1. Crie um repositório vazio no GitHub.
-2. Envie **todo o conteúdo desta pasta** para a raiz do repositório.
-3. Abra a aba **Actions**.
-4. Abra **Build Android APK**.
-5. Use **Run workflow**.
-6. O workflow roda os testes, compila a versão debug e publica o artefato **NVDroneMapping-debug**.
-7. Dentro dele estará `app-debug.apk`.
+```text
+http://www.uav.com/wpmz/1.0.2
+```
 
-O workflow também roda automaticamente em push para `main`/`master` e em pull requests.
+## Altura
 
-## Estrutura principal
+O aplicativo deixa explícito qual modo está ativo:
 
-- `MainActivity.kt` — interface, mapa, projetos, importação/exportação;
-- `GridPlanner.kt` — cálculo da malha e divisão de missões;
-- `GeoMath.kt` — projeção local, área e distâncias;
-- `KmzExporter.kt` — geração do KMZ/WPML DJI;
-- `KmlImporter.kt` — leitura de KML/KMZ;
-- `ProjectStore.kt` — projetos salvos;
-- `CorePlannerTest.kt` — testes automáticos do planejador e KMZ;
-- `.github/workflows/android.yml` — build do APK.
+- **ALTURA MANUAL**: o valor digitado é usado no planejamento e exportado para o DJI.
+- **ALTURA AUTOMÁTICA POR GSD**: o NV Mapping calcula a altura e bloqueia o campo manual para evitar ambiguidade.
 
-## Testes já executados nesta entrega
+Ao abrir um projeto salvo, a altura resolvida do projeto é preservada como valor manual. Projetos antigos sem a nova geometria de faixas são regenerados automaticamente quando possível; o exportador bloqueia planos legados que não possam ser convertidos com segurança.
 
-O núcleo JVM foi compilado e executado localmente com testes de fumaça:
+## Bateria e divisão
 
-- retângulo ~120 × 80 m: rota e estatísticas geradas;
-- polígono estreito ~8 × 100 m: uma faixa central foi gerada corretamente;
-- missão densa: divisão automática em partes de no máximo 190 pontos;
-- KMZ: presença de `wpmz/template.kml` e `wpmz/waylines.wpml`;
-- XML interno: parse válido;
-- modo full-auto: uma ação `takePhoto` por waypoint.
+A estimativa não adiciona mais tempo artificial de parada por fotografia, porque o disparo ocorre durante o voo. A divisão por bateria:
 
-A compilação Android completa fica automatizada no GitHub Actions, pois esta entrega foi produzida em um ambiente sem Android SDK local.
+- considera ida, levantamento contínuo, retorno e margem operacional;
+- prefere encerrar cada parte no final de uma faixa;
+- respeita o limite configurado de waypoints reais enviados ao DJI;
+- permite sobreposição de fotos na retomada entre baterias.
 
-## Próximas evoluções recomendadas
+## Compatibilidade e segurança
 
-- transferência assistida ainda mais automática para a pasta de missão do DJI Fly, quando o Android/controle permitir;
-- mapa offline;
-- terreno/elevação (terrain follow);
-- cálculo de bateria por trecho;
-- ponto de decolagem selecionável;
-- corredores/linhas;
-- missão oblíqua 3D com modelo de footprint específico para câmera inclinada;
-- exportação de relatório da missão.
+O exportador preserva altura, velocidade, gimbal e ações configuradas no plano. O modo antigo de “parar em cada ponto e fotografar” não é usado como fallback: se uma missão legada não puder ser atualizada para a geometria contínua, a exportação é bloqueada e o usuário deve regenerar o plano.
 
-## Referências técnicas usadas no desenho da V1
+Antes de qualquer voo:
 
-- DJI WPML / Waypoint Markup Language: documentação oficial DJI Developer.
-- Especificações da câmera DJI Mini 5 Pro: DJI.
-- Formato consumer DJI Fly/RC2 e testes Mini 5 Pro: projeto open-source FlyPath (dronnix-io/FlyPath).
+- confira a missão no DJI Fly;
+- confira altura, velocidade, Home/RTH, gimbal e ações de câmera;
+- faça o primeiro teste em uma área aberta, pequena e segura;
+- não use a primeira missão de validação em uma operação de produção.
 
-## Licença
+## Testes
 
-MIT. Use e modifique por sua conta, sempre validando a missão no DJI Fly antes do voo.
+O CI executa testes unitários do planejador/exportador e compila um APK debug de validação em pull requests.

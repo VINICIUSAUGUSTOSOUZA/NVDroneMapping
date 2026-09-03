@@ -14,7 +14,12 @@ import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.cos
 
 class CorePlannerTest {
-    private fun rect(centerLat: Double, centerLon: Double, widthM: Double, heightM: Double): List<LatLng> {
+    private fun rect(
+        centerLat: Double,
+        centerLon: Double,
+        widthM: Double,
+        heightM: Double
+    ): List<LatLng> {
         val latDeg = heightM / 111_320.0 / 2.0
         val lonDeg = widthM / (111_320.0 * cos(Math.toRadians(centerLat))) / 2.0
         return listOf(
@@ -27,22 +32,70 @@ class CorePlannerTest {
 
     @Test
     fun narrowAreaStillGeneratesFlightLine() {
-        val plan = GridPlanner.plan(rect(-26.1, -48.62, 8.0, 100.0), MissionSettings())
+        val plan = GridPlanner.plan(
+            rect(-26.1, -48.62, 8.0, 100.0),
+            MissionSettings()
+        )
+
         assertTrue(plan.waypoints.size >= 2)
         assertTrue(plan.stats.flightLineCount >= 1)
+        assertTrue(plan.surveyLines.isNotEmpty())
     }
 
     @Test
-    fun denseMissionIsSplitBelowWaypointLimit() {
-        val settings = MissionSettings(altitudeM = 30.0, frontOverlapPct = 90.0, sideOverlapPct = 90.0)
-        val plan = GridPlanner.plan(rect(-26.1, -48.62, 600.0, 600.0), settings)
+    fun denseMissionIsSplitBelowConservativePhotoPointLimit() {
+        val settings = MissionSettings(
+            altitudeM = 30.0,
+            frontOverlapPct = 90.0,
+            sideOverlapPct = 90.0
+        )
+        val plan = GridPlanner.plan(
+            rect(-26.1, -48.62, 600.0, 600.0),
+            settings
+        )
+
         assertTrue(plan.parts.size > 1)
         assertTrue(plan.parts.all { it.size <= 190 })
     }
 
     @Test
-    fun exportedKmzContainsDjiStructureAndAutomaticPhotoActions() {
-        val plan = GridPlanner.plan(rect(-26.1, -48.62, 120.0, 80.0), MissionSettings())
+    fun plannerSeparatesPhotoPointsFromSurveyGeometry() {
+        val settings = MissionSettings(
+            altitudeM = 45.0,
+            frontOverlapPct = 85.0,
+            sideOverlapPct = 75.0
+        )
+        val plan = GridPlanner.plan(
+            rect(-26.1, -48.62, 220.0, 160.0),
+            settings
+        )
+
+        assertTrue(plan.surveyLines.size >= 2)
+        assertTrue(plan.waypoints.size > plan.surveyLines.size * 2)
+
+        plan.surveyLines.forEach { line ->
+            assertTrue(line.photoStartIndex >= 0)
+            assertTrue(line.photoEndIndex >= line.photoStartIndex)
+            assertTrue(line.photoEndIndex < plan.waypoints.size)
+            assertTrue(line.photoSpacingM > 0.0)
+        }
+    }
+
+    @Test
+    fun exportedKmzContainsContinuousDjiRouteAndDistancePhotos() {
+        val settings = MissionSettings(
+            altitudeM = 73.0,
+            speedMs = 6.0,
+            frontOverlapPct = 85.0,
+            sideOverlapPct = 75.0,
+            maxWaypointsPerMission = 200
+        )
+        val plan = GridPlanner.plan(
+            rect(-26.1, -48.62, 180.0, 120.0),
+            settings
+        )
+        assertEquals(1, plan.parts.size)
+
         val out = ByteArrayOutputStream()
         KmzExporter.writeKmz(plan, 0, "Unit Test", out)
 
@@ -56,13 +109,33 @@ class CorePlannerTest {
             }
         }
 
-        assertEquals(setOf("wpmz/template.kml", "wpmz/waylines.wpml"), entries.keys)
-        val dbf = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
-        entries.values.forEach { dbf.newDocumentBuilder().parse(ByteArrayInputStream(it)) }
+        assertEquals(
+            setOf("wpmz/template.kml", "wpmz/waylines.wpml"),
+            entries.keys
+        )
 
-        val waylines = entries.getValue("wpmz/waylines.wpml").toString(Charsets.UTF_8)
-        val actions = Regex("<wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>").findAll(waylines).count()
-        assertEquals(plan.parts[0].size, actions)
-        assertTrue(waylines.contains("toPointAndStopWithDiscontinuityCurvature"))
+        val dbf = DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = true
+        }
+        entries.values.forEach {
+            dbf.newDocumentBuilder().parse(ByteArrayInputStream(it))
+        }
+
+        val waylines = entries
+            .getValue("wpmz/waylines.wpml")
+            .toString(Charsets.UTF_8)
+
+        val distanceTriggers = Regex(
+            "<wpml:actionTriggerType>multipleDistance</wpml:actionTriggerType>"
+        ).findAll(waylines).count()
+        val placemarks = Regex("<Placemark>").findAll(waylines).count()
+
+        assertEquals(plan.surveyLines.size, distanceTriggers)
+        assertTrue(waylines.contains("toPointAndPassWithContinuityCurvature"))
+        assertTrue(waylines.contains("<wpml:useStraightLine>1</wpml:useStraightLine>"))
+        assertTrue(waylines.contains("<wpml:executeHeight>73.0</wpml:executeHeight>"))
+        assertTrue(waylines.contains("<wpml:waypointSpeed>6.0</wpml:waypointSpeed>"))
+        assertTrue(waylines.contains("<wpml:waypointGimbalPitchAngle>-90.0</wpml:waypointGimbalPitchAngle>"))
+        assertTrue(placemarks < plan.waypoints.size)
     }
 }

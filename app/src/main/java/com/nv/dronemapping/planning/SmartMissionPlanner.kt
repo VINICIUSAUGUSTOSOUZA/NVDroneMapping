@@ -11,10 +11,10 @@ import kotlin.math.tan
 /**
  * Planejamento complementar, isolado da geração geométrica da grade.
  *
- * O GridPlanner continua gerando a mesma rota. Este módulo apenas:
+ * O GridPlanner gera as faixas e os pontos previstos de foto. Este módulo:
  * 1) converte um GSD desejado em altura para a câmera cadastrada;
- * 2) divide uma rota pronta em partes executáveis por bateria;
- * 3) inclui ida desde o ponto de partida, levantamento, fotos, retorno e margem.
+ * 2) divide a sequência de cobertura em partes executáveis por bateria;
+ * 3) inclui ida desde o ponto de partida, levantamento contínuo, retorno e margem.
  */
 object SmartMissionPlanner {
 
@@ -50,9 +50,7 @@ object SmartMissionPlanner {
             get() = parts.size
     }
 
-    /**
-     * Usa a mesma geometria de câmera adotada no GridPlanner atual.
-     */
+    /** Usa a mesma geometria de câmera adotada no GridPlanner. */
     fun altitudeForGsd(
         targetGsdCmPx: Double,
         camera: CameraModel = CameraModel()
@@ -82,6 +80,10 @@ object SmartMissionPlanner {
 
         val nominalSeconds = options.nominalBatteryMinutes * 60.0
         val usableSeconds = nominalSeconds * (1.0 - options.reservePct / 100.0)
+
+        // Mantemos o limite de pontos previstos por parte por compatibilidade com
+        // projetos existentes e como margem conservadora. O exportador DJI agora
+        // converte essas faixas em um número muito menor de waypoints reais.
         val maxPoints = maxWaypointsPerMission.coerceIn(20, 200)
         val repeatPhotos = options.overlapPhotos.coerceIn(0, 20)
 
@@ -117,8 +119,6 @@ object SmartMissionPlanner {
                 }
             }
 
-            // Se até o menor trecho excede a janela útil, ainda produz uma parte
-            // mínima e marca o alerta. Assim o usuário é avisado em vez de perder rota.
             if (!foundWithinTime) {
                 bestEnd = min(start + 1, maxEndByPoints)
             }
@@ -139,12 +139,9 @@ object SmartMissionPlanner {
                 exceedsUsableTime = estimate.totalSeconds > usableSeconds
             )
 
-            if (bestEnd >= waypoints.lastIndex) {
-                break
-            }
+            if (bestEnd >= waypoints.lastIndex) break
 
-            // A próxima bateria reinicia algumas fotos antes do fim anterior.
-            // Ex.: fim 300 e repetição 5 -> próxima inicia na foto 296.
+            // A bateria seguinte retoma algumas fotos antes do final anterior.
             val nextStart = max(
                 start + 1,
                 bestEnd - repeatPhotos + 1
@@ -179,16 +176,15 @@ object SmartMissionPlanner {
         val outboundSeconds =
             if (home != null) GeoMath.distanceM(home, points.first()) / speedMs else 0.0
 
-        val routeSeconds = GeoMath.polylineDistanceM(points) / speedMs
-
-        // Mantém a mesma premissa já usada no app para parada/disparo por foto.
-        val photoSeconds = points.size * PHOTO_ACTION_SECONDS
+        // As fotos agora são disparadas durante o deslocamento. Não existe mais
+        // penalidade fixa por foto/parada no cálculo de duração.
+        val surveySeconds = GeoMath.polylineDistanceM(points) / speedMs
 
         val returnSeconds =
             if (home != null) GeoMath.distanceM(points.last(), home) / speedMs else 0.0
 
-        val surveySeconds = routeSeconds + photoSeconds
-        val total = outboundSeconds + surveySeconds + returnSeconds + OPERATION_OVERHEAD_SECONDS
+        val total =
+            outboundSeconds + surveySeconds + returnSeconds + OPERATION_OVERHEAD_SECONDS
 
         return Estimate(
             outboundSeconds = outboundSeconds,
@@ -198,6 +194,5 @@ object SmartMissionPlanner {
         )
     }
 
-    private const val PHOTO_ACTION_SECONDS = 1.5
     private const val OPERATION_OVERHEAD_SECONDS = 60.0
 }

@@ -38,7 +38,6 @@ class SmartPlanningController(
 
     fun install() {
         installSmartPlanningButton()
-        installAltitudeModeStatus()
         refreshSmartButton()
         refreshAltitudeModeUi()
     }

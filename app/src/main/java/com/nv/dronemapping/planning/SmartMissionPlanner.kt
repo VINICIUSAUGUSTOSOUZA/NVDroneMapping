@@ -3,6 +3,7 @@ package com.nv.dronemapping.planning
 import com.nv.dronemapping.geometry.GeoMath
 import com.nv.dronemapping.model.CameraModel
 import com.nv.dronemapping.model.LatLng
+import com.nv.dronemapping.model.SurveyLine
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -13,8 +14,9 @@ import kotlin.math.tan
  *
  * O GridPlanner gera as faixas e os pontos previstos de foto. Este módulo:
  * 1) converte um GSD desejado em altura para a câmera cadastrada;
- * 2) divide a sequência de cobertura em partes executáveis por bateria;
- * 3) inclui ida desde o ponto de partida, levantamento contínuo, retorno e margem.
+ * 2) divide a cobertura em partes executáveis por bateria, preferindo terminar
+ *    nos finais de faixa e respeitando o limite de waypoints reais do DJI;
+ * 3) inclui ida, levantamento contínuo, retorno e margem operacional.
  */
 object SmartMissionPlanner {
 
@@ -30,6 +32,7 @@ object SmartMissionPlanner {
         val partNumber: Int,
         val startPhotoNumber: Int,
         val endPhotoNumber: Int,
+        /** Quantidade estimada de waypoints reais enviados ao DJI. */
         val waypointCount: Int,
         val outboundSeconds: Double,
         val surveySeconds: Double,
@@ -71,7 +74,8 @@ object SmartMissionPlanner {
         speedMs: Double,
         maxWaypointsPerMission: Int,
         options: Options,
-        home: LatLng?
+        home: LatLng?,
+        surveyLines: List<SurveyLine> = emptyList()
     ): BatteryPlan {
         require(waypoints.size >= 2) { "A rota precisa ter pelo menos dois pontos." }
         require(speedMs > 0.0) { "Velocidade inválida." }
@@ -80,12 +84,16 @@ object SmartMissionPlanner {
 
         val nominalSeconds = options.nominalBatteryMinutes * 60.0
         val usableSeconds = nominalSeconds * (1.0 - options.reservePct / 100.0)
-
-        // Mantemos o limite de pontos previstos por parte por compatibilidade com
-        // projetos existentes e como margem conservadora. O exportador DJI agora
-        // converte essas faixas em um número muito menor de waypoints reais.
-        val maxPoints = maxWaypointsPerMission.coerceIn(20, 200)
+        val maxDjiWaypoints = maxWaypointsPerMission.coerceIn(20, 200)
         val repeatPhotos = options.overlapPhotos.coerceIn(0, 20)
+
+        val validLines = surveyLines
+            .filter {
+                it.photoStartIndex in waypoints.indices &&
+                    it.photoEndIndex in waypoints.indices &&
+                    it.photoEndIndex > it.photoStartIndex
+            }
+            .sortedBy { it.photoStartIndex }
 
         val parts = mutableListOf<List<LatLng>>()
         val infos = mutableListOf<PartInfo>()
@@ -97,41 +105,76 @@ object SmartMissionPlanner {
         while (start < waypoints.lastIndex && safety < 10_000) {
             safety++
 
-            val maxEndByPoints = min(
-                waypoints.lastIndex,
-                start + maxPoints - 1
+            val maxEndByDjiLimit = maxEndByDjiWaypointLimit(
+                startIndex = start,
+                lastPhotoIndex = waypoints.lastIndex,
+                lines = validLines,
+                maxDjiWaypoints = maxDjiWaypoints
             )
 
-            var bestEnd = min(start + 1, maxEndByPoints)
-            var candidate = bestEnd
-            var foundWithinTime = false
+            val preferredEnds = validLines
+                .asSequence()
+                .map { it.photoEndIndex }
+                .filter { it > start && it <= maxEndByDjiLimit }
+                .distinct()
+                .sorted()
+                .toList()
 
-            while (candidate <= maxEndByPoints) {
+            var bestEnd = -1
+
+            // Primeiro tentamos sempre encerrar no final de uma faixa completa.
+            for (candidate in preferredEnds) {
                 val candidatePoints = waypoints.subList(start, candidate + 1)
                 val estimate = estimatePart(candidatePoints, speedMs, home)
 
                 if (estimate.totalSeconds <= usableSeconds) {
                     bestEnd = candidate
-                    foundWithinTime = true
-                    candidate++
                 } else {
                     break
                 }
             }
 
-            if (!foundWithinTime) {
-                bestEnd = min(start + 1, maxEndByPoints)
+            // Se nenhuma faixa completa couber (ex.: uma faixa muito longa),
+            // permitimos corte dentro dela para não produzir uma missão impossível.
+            if (bestEnd < 0) {
+                var candidate = min(start + 1, maxEndByDjiLimit)
+                bestEnd = candidate
+
+                while (candidate <= maxEndByDjiLimit) {
+                    val estimate = estimatePart(
+                        waypoints.subList(start, candidate + 1),
+                        speedMs,
+                        home
+                    )
+
+                    if (estimate.totalSeconds <= usableSeconds) {
+                        bestEnd = candidate
+                        candidate++
+                    } else {
+                        break
+                    }
+                }
+            }
+
+            if (bestEnd <= start) {
+                bestEnd = min(start + 1, waypoints.lastIndex)
             }
 
             val part = waypoints.subList(start, bestEnd + 1).toList()
             val estimate = estimatePart(part, speedMs, home)
+            val djiWaypoints = estimateDjiWaypointCount(
+                startIndex = start,
+                endIndex = bestEnd,
+                lines = validLines,
+                fallbackPhotoCount = part.size
+            )
 
             parts += part
             infos += PartInfo(
                 partNumber = partNumber,
                 startPhotoNumber = start + 1,
                 endPhotoNumber = bestEnd + 1,
-                waypointCount = part.size,
+                waypointCount = djiWaypoints,
                 outboundSeconds = estimate.outboundSeconds,
                 surveySeconds = estimate.surveySeconds,
                 returnSeconds = estimate.returnSeconds,
@@ -142,10 +185,11 @@ object SmartMissionPlanner {
             if (bestEnd >= waypoints.lastIndex) break
 
             // A bateria seguinte retoma algumas fotos antes do final anterior.
+            // O exportador recorta somente o trecho necessário da faixa repetida.
             val nextStart = max(
                 start + 1,
                 bestEnd - repeatPhotos + 1
-            )
+            ).coerceAtMost(waypoints.lastIndex)
 
             start = nextStart
             partNumber++
@@ -159,6 +203,42 @@ object SmartMissionPlanner {
             reservePct = options.reservePct,
             homeUsed = home != null
         )
+    }
+
+    private fun maxEndByDjiWaypointLimit(
+        startIndex: Int,
+        lastPhotoIndex: Int,
+        lines: List<SurveyLine>,
+        maxDjiWaypoints: Int
+    ): Int {
+        if (lines.isEmpty()) {
+            return min(lastPhotoIndex, startIndex + maxDjiWaypoints - 1)
+        }
+
+        val intersecting = lines.filter { it.photoEndIndex >= startIndex }
+        if (intersecting.isEmpty()) return lastPhotoIndex
+
+        val maxLines = max(1, maxDjiWaypoints / 2)
+        val allowed = intersecting.take(maxLines)
+        return allowed.lastOrNull()?.photoEndIndex
+            ?.coerceIn(startIndex + 1, lastPhotoIndex)
+            ?: min(lastPhotoIndex, startIndex + 1)
+    }
+
+    private fun estimateDjiWaypointCount(
+        startIndex: Int,
+        endIndex: Int,
+        lines: List<SurveyLine>,
+        fallbackPhotoCount: Int
+    ): Int {
+        if (lines.isEmpty()) return fallbackPhotoCount
+
+        val intersectedLines = lines.count {
+            it.photoEndIndex >= startIndex && it.photoStartIndex <= endIndex
+        }
+
+        return (intersectedLines * 2)
+            .coerceAtLeast(2)
     }
 
     private data class Estimate(
@@ -176,8 +256,8 @@ object SmartMissionPlanner {
         val outboundSeconds =
             if (home != null) GeoMath.distanceM(home, points.first()) / speedMs else 0.0
 
-        // As fotos agora são disparadas durante o deslocamento. Não existe mais
-        // penalidade fixa por foto/parada no cálculo de duração.
+        // As fotos são disparadas durante o deslocamento: não existe penalidade
+        // fixa de parada por foto.
         val surveySeconds = GeoMath.polylineDistanceM(points) / speedMs
 
         val returnSeconds =

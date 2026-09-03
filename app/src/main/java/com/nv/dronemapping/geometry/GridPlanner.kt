@@ -22,9 +22,6 @@ object GridPlanner {
     private data class GridResult(
         val lines: List<LineResult>
     ) {
-        val photoPoints: List<LatLng>
-            get() = lines.flatMap { it.photoPoints }
-
         val lineCount: Int
             get() = lines.size
     }
@@ -57,38 +54,41 @@ object GridPlanner {
         }
 
         val primary = generateGrid(
-            boundary,
-            bearing,
-            lineSpacing,
-            desiredPhotoSpacing
+            boundary = boundary,
+            bearingDeg = bearing,
+            lineSpacing = lineSpacing,
+            photoSpacing = desiredPhotoSpacing
         )
 
         val secondary = if (settings.crossHatch) {
             generateGrid(
-                boundary,
-                normalizeBearing(bearing + 90.0),
-                lineSpacing,
-                desiredPhotoSpacing
+                boundary = boundary,
+                bearingDeg = normalizeBearing(bearing + 90.0),
+                lineSpacing = lineSpacing,
+                photoSpacing = desiredPhotoSpacing
             )
         } else {
             null
         }
 
         val generatedLines = primary.lines + (secondary?.lines ?: emptyList())
-        val waypoints = generatedLines.flatMap { it.photoPoints }
+        val photoPoints = generatedLines.flatMap { it.photoPoints }
 
-        require(waypoints.size >= 2) { "Não foi possível gerar uma rota dentro da área." }
+        require(photoPoints.size >= 2) { "Não foi possível gerar uma rota dentro da área." }
 
         val surveyLines = buildSurveyLines(generatedLines)
         require(surveyLines.isNotEmpty()) { "Não foi possível gerar faixas de levantamento." }
 
-        val parts = splitMission(
-            waypoints,
-            settings.maxWaypointsPerMission.coerceIn(20, 200)
+        val routeWaypoints = routePointsForLines(surveyLines)
+        require(routeWaypoints.size >= 2) { "Não foi possível gerar a geometria da rota DJI." }
+
+        val parts = splitMissionBySurveyLines(
+            photoPoints = photoPoints,
+            surveyLines = surveyLines,
+            maxDjiWaypoints = settings.maxWaypointsPerMission.coerceIn(20, 200)
         )
 
-        val routePoints = surveyLines.flatMap { listOf(it.start, it.end) }
-        val routeDistance = GeoMath.polylineDistanceM(routePoints)
+        val routeDistance = GeoMath.polylineDistanceM(routeWaypoints)
         val estimatedSeconds = routeDistance / settings.speedMs
         val gsdCmPx = footprint.first / camera.imageWidthPx * 100.0
         val lineCount = surveyLines.size
@@ -109,7 +109,7 @@ object GridPlanner {
             photoSpacingM = effectivePhotoSpacing,
             routeDistanceM = routeDistance,
             estimatedFlightSeconds = estimatedSeconds,
-            photoCount = waypoints.size,
+            photoCount = photoPoints.size,
             flightLineCount = lineCount,
             partCount = parts.size,
             effectiveBearingDeg = bearing
@@ -117,11 +117,12 @@ object GridPlanner {
 
         return MissionPlan(
             boundary = boundary,
-            waypoints = waypoints,
+            waypoints = photoPoints,
             parts = parts,
             settings = settings.copy(bearingDeg = bearing),
             stats = stats,
-            surveyLines = surveyLines
+            surveyLines = surveyLines,
+            routeWaypoints = routeWaypoints
         )
     }
 
@@ -298,6 +299,7 @@ object GridPlanner {
 
     private fun buildSurveyLines(lines: List<LineResult>): List<SurveyLine> {
         var photoIndex = 0
+
         return lines.mapNotNull { line ->
             if (line.photoPoints.size < 2) return@mapNotNull null
 
@@ -315,32 +317,50 @@ object GridPlanner {
         }
     }
 
+    private fun routePointsForLines(lines: List<SurveyLine>): List<LatLng> {
+        val result = mutableListOf<LatLng>()
+
+        lines.forEach { line ->
+            if (result.lastOrNull()?.let { GeoMath.distanceM(it, line.start) < 0.05 } != true) {
+                result += line.start
+            }
+            if (result.lastOrNull()?.let { GeoMath.distanceM(it, line.end) < 0.05 } != true) {
+                result += line.end
+            }
+        }
+
+        return result
+    }
+
     fun orientTowardStart(
         plan: MissionPlan,
         preferredStart: LatLng?
     ): MissionPlan {
         preferredStart ?: return plan
-        if (plan.waypoints.size < 2) return plan
+        if (plan.photoPoints.size < 2) return plan
 
-        val firstDistance = GeoMath.distanceM(preferredStart, plan.waypoints.first())
-        val lastDistance = GeoMath.distanceM(preferredStart, plan.waypoints.last())
+        val firstDistance = GeoMath.distanceM(preferredStart, plan.photoPoints.first())
+        val lastDistance = GeoMath.distanceM(preferredStart, plan.photoPoints.last())
 
         if (firstDistance <= lastDistance) return plan
 
-        val reversedWaypoints = plan.waypoints.asReversed()
-        val reversedParts = splitMission(
-            reversedWaypoints,
-            plan.settings.maxWaypointsPerMission.coerceIn(20, 200)
-        )
+        val reversedPhotoPoints = plan.photoPoints.asReversed()
         val reversedSurveyLines = reverseSurveyLines(
-            plan.surveyLines,
-            plan.waypoints.size
+            lines = plan.surveyLines,
+            photoCount = plan.photoPoints.size
+        )
+        val reversedRouteWaypoints = routePointsForLines(reversedSurveyLines)
+        val reversedParts = splitMissionBySurveyLines(
+            photoPoints = reversedPhotoPoints,
+            surveyLines = reversedSurveyLines,
+            maxDjiWaypoints = plan.settings.maxWaypointsPerMission.coerceIn(20, 200)
         )
 
         return plan.copy(
-            waypoints = reversedWaypoints,
+            waypoints = reversedPhotoPoints,
             parts = reversedParts,
             surveyLines = reversedSurveyLines,
+            routeWaypoints = reversedRouteWaypoints,
             stats = plan.stats.copy(partCount = reversedParts.size)
         )
     }
@@ -362,7 +382,35 @@ object GridPlanner {
         }
     }
 
-    private fun splitMission(
+    /**
+     * O limite configurado agora representa waypoints reais enviados ao DJI.
+     * Como cada faixa usa no máximo início + fim, agrupamos por quantidade de
+     * faixas em vez de limitar a quantidade de fotografias.
+     */
+    private fun splitMissionBySurveyLines(
+        photoPoints: List<LatLng>,
+        surveyLines: List<SurveyLine>,
+        maxDjiWaypoints: Int
+    ): List<List<LatLng>> {
+        if (surveyLines.isEmpty()) {
+            return splitLegacy(photoPoints, maxDjiWaypoints)
+        }
+
+        val maxLinesPerPart = max(1, maxDjiWaypoints / 2)
+        val result = mutableListOf<List<LatLng>>()
+
+        surveyLines.chunked(maxLinesPerPart).forEach { lines ->
+            val firstPhoto = lines.first().photoStartIndex.coerceIn(photoPoints.indices)
+            val lastPhoto = lines.last().photoEndIndex.coerceIn(photoPoints.indices)
+            if (lastPhoto > firstPhoto) {
+                result += photoPoints.subList(firstPhoto, lastPhoto + 1).toList()
+            }
+        }
+
+        return result.ifEmpty { listOf(photoPoints) }
+    }
+
+    private fun splitLegacy(
         points: List<LatLng>,
         maxPerPart: Int
     ): List<List<LatLng>> {

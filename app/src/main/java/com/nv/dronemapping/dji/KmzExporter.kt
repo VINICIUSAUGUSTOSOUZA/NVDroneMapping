@@ -319,16 +319,7 @@ $placemarks  </Folder>
             return "toPointAndStopWithDiscontinuityCurvature" to 0.0
         }
 
-        val previousDistance = GeoMath.distanceM(points[index - 1], points[index])
-        val nextDistance = GeoMath.distanceM(points[index], points[index + 1])
-        val safeDamping = min(previousDistance, nextDistance) * 0.20
-
-        if (safeDamping < 0.50) {
-            return "toPointAndStopWithDiscontinuityCurvature" to 0.0
-        }
-
-        return "toPointAndPassWithContinuityCurvature" to
-            min(desiredDampingM, safeDamping).coerceAtLeast(0.50)
+        return "toPointAndPassWithContinuityCurvature" to 0.0
     }
 
     private fun missionConfig(

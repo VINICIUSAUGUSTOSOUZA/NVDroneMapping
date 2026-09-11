@@ -3,7 +3,6 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-  pull_request:
 
 jobs:
   build:
@@ -36,8 +35,7 @@ jobs:
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
 
-      - name: Require fixed signing key for installable builds
-        if: github.event_name != 'pull_request'
+      - name: Require fixed signing key
         shell: bash
         run: |
           if [ -z "$NV_KEYSTORE_BASE64" ]; then
@@ -47,13 +45,11 @@ jobs:
           fi
 
       - name: Prepare fixed signing key
-        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           printf '%s' "$NV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nv-mapping-release.jks"
 
       - name: Build signed update APK
-        if: github.event_name != 'pull_request'
         env:
           NV_SIGNING_STORE_FILE: ${{ runner.temp }}/nv-mapping-release.jks
           NV_SIGNING_STORE_PASSWORD: ${{ secrets.NV_SIGNING_STORE_PASSWORD }}
@@ -64,11 +60,9 @@ jobs:
         run: gradle :app:assembleRelease --stacktrace
 
       - name: Rename signed update APK
-        if: github.event_name != 'pull_request'
         run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/NV-Mapping-update.apk
 
       - name: Upload signed update APK
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: NV-Mapping-update

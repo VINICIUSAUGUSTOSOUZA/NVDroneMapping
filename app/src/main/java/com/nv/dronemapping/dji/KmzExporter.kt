@@ -377,7 +377,7 @@ $placemarks  </Folder>
         <wpml:waypointHeadingMode>followWayline</wpml:waypointHeadingMode>
         <wpml:waypointHeadingAngle>0</wpml:waypointHeadingAngle>
         <wpml:waypointPoiPoint>0.000000,0.000000,0.000000</wpml:waypointPoiPoint>
-        <wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>
+        <wpml:waypointHeadingAngleEnable>0</wpml:waypointHeadingAngleEnable>
         <wpml:waypointHeadingPathMode>followBadArc</wpml:waypointHeadingPathMode>
         <wpml:waypointHeadingPoiIndex>0</wpml:waypointHeadingPoiIndex>
       </wpml:waypointHeadingParam>

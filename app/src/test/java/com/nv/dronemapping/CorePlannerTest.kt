@@ -126,7 +126,7 @@ class CorePlannerTest {
     }
 
     @Test
-    fun exportedKmzContainsContinuousDjiRouteAndDistancePhotos() {
+    fun exportedKmzUsesExplicitPhotoWaypointsLikeKnownGoodDjiVersion() {
         val settings = MissionSettings(
             altitudeM = 73.0,
             speedMs = 6.0,
@@ -141,23 +141,27 @@ class CorePlannerTest {
         assertEquals(1, plan.parts.size)
 
         val waylines = exportPart(plan, 0)
+        val placemarks = Regex("<Placemark>").findAll(waylines).count()
+        val photoActions = Regex(
+            "<wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>"
+        ).findAll(waylines).count()
         val distanceTriggers = Regex(
             "<wpml:actionTriggerType>multipleDistance</wpml:actionTriggerType>"
         ).findAll(waylines).count()
-        val placemarks = Regex("<Placemark>").findAll(waylines).count()
 
-        assertEquals(plan.surveyLines.size, distanceTriggers)
-        assertTrue(waylines.contains("toPointAndPassWithContinuityCurvature"))
-        assertTrue(waylines.contains("<wpml:useStraightLine>1</wpml:useStraightLine>"))
+        assertEquals(plan.parts[0].size, placemarks)
+        assertEquals(plan.parts[0].size, photoActions)
+        assertEquals(0, distanceTriggers)
+        assertTrue(waylines.contains("toPointAndStopWithContinuityCurvature"))
+        assertTrue(waylines.contains("<wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>"))
+        assertTrue(waylines.contains("<wpml:useStraightLine>0</wpml:useStraightLine>"))
         assertTrue(waylines.contains("<wpml:executeHeight>73.0</wpml:executeHeight>"))
         assertTrue(waylines.contains("<wpml:waypointSpeed>6.0</wpml:waypointSpeed>"))
         assertTrue(waylines.contains("<wpml:waypointGimbalPitchAngle>-90.0</wpml:waypointGimbalPitchAngle>"))
-        assertTrue(placemarks < plan.photoPoints.size)
-        assertTrue(placemarks <= plan.routeWaypoints.size)
     }
 
     @Test
-    fun legacyPlanWithoutSurveyLinesIsBlockedInsteadOfExportingStopAndShoot() {
+    fun exportUsesPlannedPhotoPointsEvenWithoutSurveyLineMetadata() {
         val plan = GridPlanner.plan(
             rect(-26.1, -48.62, 120.0, 80.0),
             MissionSettings()
@@ -167,16 +171,8 @@ class CorePlannerTest {
             routeWaypoints = emptyList()
         )
 
-        val error = runCatching {
-            KmzExporter.writeKmz(
-                legacy,
-                0,
-                "Legacy",
-                ByteArrayOutputStream()
-            )
-        }.exceptionOrNull()
-
-        assertTrue(error is IllegalArgumentException)
-        assertTrue(error?.message.orEmpty().contains("versão antiga"))
+        val waylines = exportPart(legacy, 0)
+        val placemarks = Regex("<Placemark>").findAll(waylines).count()
+        assertEquals(legacy.parts[0].size, placemarks)
     }
 }

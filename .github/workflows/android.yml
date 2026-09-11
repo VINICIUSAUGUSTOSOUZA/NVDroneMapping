@@ -3,7 +3,6 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master", "feat/dji-continuous-mapping" ]
   pull_request:
 
 jobs:
@@ -74,18 +73,3 @@ jobs:
         with:
           name: NV-Mapping-update
           path: app/build/outputs/apk/release/NV-Mapping-update.apk
-
-      - name: Build debug APK for PR validation only
-        if: github.event_name == 'pull_request'
-        run: gradle :app:assembleDebug --stacktrace
-
-      - name: Rename PR validation APK
-        if: github.event_name == 'pull_request'
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/NV-Mapping-debug.apk
-
-      - name: Upload PR validation APK
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: NV-Mapping-debug
-          path: app/build/outputs/apk/debug/NV-Mapping-debug.apk

@@ -316,19 +316,10 @@ $placemarks  </Folder>
         desiredDampingM: Double
     ): Pair<String, Double> {
         if (index == 0 || index == points.lastIndex) {
-            return "toPointAndStopWithDiscontinuityCurvature" to 0.0
+            return "toPointAndStopWithContinuityCurvature" to 0.0
         }
 
-        val previousDistance = GeoMath.distanceM(points[index - 1], points[index])
-        val nextDistance = GeoMath.distanceM(points[index], points[index + 1])
-        val safeDamping = min(previousDistance, nextDistance) * 0.20
-
-        if (safeDamping < 0.50) {
-            return "toPointAndStopWithDiscontinuityCurvature" to 0.0
-        }
-
-        return "toPointAndPassWithContinuityCurvature" to
-            min(desiredDampingM, safeDamping).coerceAtLeast(0.50)
+        return "toPointAndPassWithContinuityCurvature" to 0.0
     }
 
     private fun missionConfig(
@@ -368,6 +359,7 @@ $placemarks  </Folder>
         dampingM: Double,
         actions: String
     ): String {
+        val headingAngleEnable = if (turnMode.startsWith("toPointAndStop")) 1 else 0
         return """    <Placemark>
       <Point><coordinates>${f("%.8f,%.8f", p.lon, p.lat)}</coordinates></Point>
       <wpml:index>$index</wpml:index>
@@ -377,7 +369,7 @@ $placemarks  </Folder>
         <wpml:waypointHeadingMode>followWayline</wpml:waypointHeadingMode>
         <wpml:waypointHeadingAngle>0</wpml:waypointHeadingAngle>
         <wpml:waypointPoiPoint>0.000000,0.000000,0.000000</wpml:waypointPoiPoint>
-        <wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>
+        <wpml:waypointHeadingAngleEnable>$headingAngleEnable</wpml:waypointHeadingAngleEnable>
         <wpml:waypointHeadingPathMode>followBadArc</wpml:waypointHeadingPathMode>
         <wpml:waypointHeadingPoiIndex>0</wpml:waypointHeadingPoiIndex>
       </wpml:waypointHeadingParam>
@@ -385,7 +377,7 @@ $placemarks  </Folder>
         <wpml:waypointTurnMode>$turnMode</wpml:waypointTurnMode>
         <wpml:waypointTurnDampingDist>${n(dampingM)}</wpml:waypointTurnDampingDist>
       </wpml:waypointTurnParam>
-      <wpml:useStraightLine>1</wpml:useStraightLine>
+      <wpml:useStraightLine>0</wpml:useStraightLine>
 $actions      <wpml:waypointGimbalHeadingParam>
         <wpml:waypointGimbalPitchAngle>${n(pitch)}</wpml:waypointGimbalPitchAngle>
         <wpml:waypointGimbalYawAngle>0</wpml:waypointGimbalYawAngle>

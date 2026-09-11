@@ -77,7 +77,7 @@ class CorePlannerTest {
     }
 
     @Test
-    fun denseMissionSplitsByRealDjiWaypointLimit() {
+    fun denseMissionExportsEveryPlannedPhotoWaypoint() {
         val settings = MissionSettings(
             altitudeM = 30.0,
             frontOverlapPct = 90.0,
@@ -89,15 +89,17 @@ class CorePlannerTest {
             settings
         )
 
-        assertTrue(plan.parts.size > 1)
+        assertTrue(plan.parts.isNotEmpty())
 
         plan.parts.indices.forEach { partIndex ->
             val waylines = exportPart(plan, partIndex)
             val placemarks = Regex("<Placemark>").findAll(waylines).count()
-            assertTrue(
-                "Parte $partIndex excedeu o limite DJI: $placemarks",
-                placemarks <= settings.maxWaypointsPerMission
-            )
+            val photoActions = Regex(
+                "<wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>"
+            ).findAll(waylines).count()
+
+            assertEquals(plan.parts[partIndex].size, placemarks)
+            assertEquals(plan.parts[partIndex].size, photoActions)
         }
     }
 

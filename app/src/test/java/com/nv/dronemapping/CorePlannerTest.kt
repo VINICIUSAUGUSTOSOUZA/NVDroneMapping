@@ -6,6 +6,7 @@ import com.nv.dronemapping.model.LatLng
 import com.nv.dronemapping.model.MissionPlan
 import com.nv.dronemapping.model.MissionSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -126,7 +127,7 @@ class CorePlannerTest {
     }
 
     @Test
-    fun exportedKmzContainsContinuousDjiRouteAndDistancePhotos() {
+    fun exportedKmzUsesOnlySurveyCornersStraightAndDistancePhotos() {
         val settings = MissionSettings(
             altitudeM = 73.0,
             speedMs = 6.0,
@@ -145,17 +146,25 @@ class CorePlannerTest {
             "<wpml:actionTriggerType>multipleDistance</wpml:actionTriggerType>"
         ).findAll(waylines).count()
         val placemarks = Regex("<Placemark>").findAll(waylines).count()
+        val straightSegments = Regex(
+            "<wpml:useStraightLine>1</wpml:useStraightLine>"
+        ).findAll(waylines).count()
+        val straightStopTurns = Regex(
+            "<wpml:waypointTurnMode>toPointAndStopWithDiscontinuityCurvature</wpml:waypointTurnMode>"
+        ).findAll(waylines).count()
 
         assertEquals(plan.surveyLines.size, distanceTriggers)
-        assertTrue(waylines.contains("toPointAndPassWithContinuityCurvature"))
-        assertTrue(waylines.contains("<wpml:useStraightLine>1</wpml:useStraightLine>"))
+        assertEquals(plan.routeWaypoints.size, placemarks)
+        assertEquals(placemarks, straightSegments)
+        assertEquals(placemarks, straightStopTurns)
+        assertFalse(waylines.contains("toPointAndPassWithContinuityCurvature"))
+        assertFalse(waylines.contains("<wpml:useStraightLine>0</wpml:useStraightLine>"))
         assertTrue(waylines.contains("<wpml:waypointTurnDampingDist>0.0</wpml:waypointTurnDampingDist>"))
-        assertTrue(waylines.contains("<wpml:waypointHeadingAngleEnable>0</wpml:waypointHeadingAngleEnable>"))
+        assertTrue(waylines.contains("<wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>"))
         assertTrue(waylines.contains("<wpml:executeHeight>73.0</wpml:executeHeight>"))
         assertTrue(waylines.contains("<wpml:waypointSpeed>6.0</wpml:waypointSpeed>"))
         assertTrue(waylines.contains("<wpml:waypointGimbalPitchAngle>-90.0</wpml:waypointGimbalPitchAngle>"))
         assertTrue(placemarks < plan.photoPoints.size)
-        assertTrue(placemarks <= plan.routeWaypoints.size)
     }
 
     @Test

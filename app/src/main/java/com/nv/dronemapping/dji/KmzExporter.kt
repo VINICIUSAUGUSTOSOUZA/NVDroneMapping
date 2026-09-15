@@ -133,9 +133,10 @@ $placemarks    </Folder>
     }
 
     /**
-     * Point structure intentionally follows a native DJI Fly Mini 5 Pro mission:
-     * headingAngleEnable=1, continuity curvature and useStraightLine=0.
-     * For the first compatibility pass the aircraft still stops at each point.
+     * Keep the native Mini 5 Pro waypoint structure, but force each segment to
+     * follow the line between consecutive points. DJI WPML defines 0 as a fully
+     * curved segment and 1 as a segment fitted as closely as possible to the
+     * straight line connecting the two points.
      */
     private fun placemark(
         index: Int,
@@ -166,7 +167,7 @@ $placemarks    </Folder>
           <wpml:waypointTurnMode>toPointAndStopWithContinuityCurvature</wpml:waypointTurnMode>
           <wpml:waypointTurnDampingDist>0</wpml:waypointTurnDampingDist>
         </wpml:waypointTurnParam>
-        <wpml:useStraightLine>0</wpml:useStraightLine>
+        <wpml:useStraightLine>1</wpml:useStraightLine>
 $actions        <wpml:waypointGimbalHeadingParam>
           <wpml:waypointGimbalPitchAngle>${n(pitch)}</wpml:waypointGimbalPitchAngle>
           <wpml:waypointGimbalYawAngle>0</wpml:waypointGimbalYawAngle>

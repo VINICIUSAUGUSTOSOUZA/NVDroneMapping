@@ -148,7 +148,7 @@ class CorePlannerTest {
 
         assertEquals(plan.surveyLines.size, distanceTriggers)
         assertTrue(waylines.contains("toPointAndPassWithContinuityCurvature"))
-        assertTrue(waylines.contains("<wpml:useStraightLine>0</wpml:useStraightLine>"))
+        assertTrue(waylines.contains("<wpml:useStraightLine>1</wpml:useStraightLine>"))
         assertTrue(waylines.contains("<wpml:waypointTurnDampingDist>0.0</wpml:waypointTurnDampingDist>"))
         assertTrue(waylines.contains("<wpml:waypointHeadingAngleEnable>0</wpml:waypointHeadingAngleEnable>"))
         assertTrue(waylines.contains("<wpml:executeHeight>73.0</wpml:executeHeight>"))

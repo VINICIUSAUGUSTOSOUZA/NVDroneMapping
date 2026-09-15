@@ -62,7 +62,8 @@ class CorePlannerTest {
 
         assertTrue(waylines.contains("toPointAndStopWithContinuityCurvature"))
         assertTrue(waylines.contains("<wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>"))
-        assertTrue(waylines.contains("<wpml:useStraightLine>0</wpml:useStraightLine>"))
+        assertTrue(waylines.contains("<wpml:useStraightLine>1</wpml:useStraightLine>"))
+        assertFalse(waylines.contains("<wpml:useStraightLine>0</wpml:useStraightLine>"))
         assertFalse(waylines.contains("toPointAndStopWithDiscontinuityCurvature"))
     }
 

@@ -377,7 +377,7 @@ $placemarks  </Folder>
         <wpml:waypointTurnMode>$turnMode</wpml:waypointTurnMode>
         <wpml:waypointTurnDampingDist>${n(dampingM)}</wpml:waypointTurnDampingDist>
       </wpml:waypointTurnParam>
-      <wpml:useStraightLine>0</wpml:useStraightLine>
+      <wpml:useStraightLine>1</wpml:useStraightLine>
 $actions      <wpml:waypointGimbalHeadingParam>
         <wpml:waypointGimbalPitchAngle>${n(pitch)}</wpml:waypointGimbalPitchAngle>
         <wpml:waypointGimbalYawAngle>0</wpml:waypointGimbalYawAngle>

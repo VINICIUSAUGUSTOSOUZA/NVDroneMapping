@@ -166,18 +166,8 @@ $config
             )
         }
 
-        val baseDamping = min(
-            5.0,
-            max(1.0, plan.stats.photoSpacingM * 0.40)
-        )
-
         val placemarks = buildString {
             route.points.forEachIndexed { index, point ->
-                val turn = turnForWaypoint(
-                    index = index,
-                    points = route.points,
-                    desiredDampingM = baseDamping
-                )
                 append(
                     placemark(
                         index = index,
@@ -185,8 +175,8 @@ $config
                         altitude = s.altitudeM,
                         speed = s.speedMs,
                         pitch = s.gimbalPitchDeg,
-                        turnMode = turn.first,
-                        dampingM = turn.second,
+                        turnMode = "toPointAndStopWithDiscontinuityCurvature",
+                        dampingM = 0.0,
                         actions = actionsByWaypoint[index]?.toString().orEmpty()
                     )
                 )
@@ -242,8 +232,11 @@ $placemarks  </Folder>
             val photoEnd = min(line.photoEndIndex, partRange.last)
             if (photoEnd <= photoStart) return@forEach
 
-            val startPoint = plan.photoPoints.getOrNull(photoStart) ?: line.start
-            val endPoint = plan.photoPoints.getOrNull(photoEnd) ?: line.end
+            // A rota DJI usa somente os vértices reais das faixas.
+            // Os pontos de fotografia continuam sendo disparados por distância,
+            // sem virar waypoints verdes intermediários.
+            val startPoint = line.start
+            val endPoint = line.end
             if (GeoMath.distanceM(startPoint, endPoint) < 0.50) return@forEach
 
             val startIndex = appendRoutePoint(startPoint)
@@ -308,18 +301,6 @@ $placemarks  </Folder>
         }
 
         return -1
-    }
-
-    private fun turnForWaypoint(
-        index: Int,
-        points: List<LatLng>,
-        desiredDampingM: Double
-    ): Pair<String, Double> {
-        if (index == 0 || index == points.lastIndex) {
-            return "toPointAndStopWithContinuityCurvature" to 0.0
-        }
-
-        return "toPointAndPassWithContinuityCurvature" to 0.0
     }
 
     private fun missionConfig(

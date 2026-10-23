@@ -5,6 +5,9 @@ import android.app.Application
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.nv.dronemapping.ui.ProfessionalMissionController
 import com.nv.dronemapping.ui.SmartPlanningController
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
@@ -35,11 +38,51 @@ class NvDroneMappingApplication : Application(), Application.ActivityLifecycleCa
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
         if (activity !is MainActivity) return
 
+        installSystemBarSafeArea(activity)
+
         activity.window.decorView.post {
             installSatellitePolicy(activity)
             SmartPlanningController(activity).install()
             ProfessionalMissionController(activity).install()
         }
+    }
+
+    /**
+     * Mantém toda a interface do NV Drone Mapping dentro da área útil real da tela.
+     *
+     * O Android 15+ força edge-to-edge para apps com target SDK recente. Em vez de
+     * alterar os layouts, controles ou o motor do app, aplicamos os insets do sistema
+     * somente no container global da Activity. Isso respeita automaticamente barra de
+     * status, notch/câmera, botões de navegação e barra de gestos em qualquer aparelho,
+     * inclusive em rotação de tela.
+     */
+    private fun installSystemBarSafeArea(activity: Activity) {
+        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+
+        val content = activity.findViewById<View>(android.R.id.content) ?: return
+
+        val initialLeft = content.paddingLeft
+        val initialTop = content.paddingTop
+        val initialRight = content.paddingRight
+        val initialBottom = content.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+            val safeInsets = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or
+                    WindowInsetsCompat.Type.displayCutout()
+            )
+
+            view.setPadding(
+                initialLeft + safeInsets.left,
+                initialTop + safeInsets.top,
+                initialRight + safeInsets.right,
+                initialBottom + safeInsets.bottom
+            )
+
+            insets
+        }
+
+        ViewCompat.requestApplyInsets(content)
     }
 
     private fun installSatellitePolicy(activity: MainActivity) {
